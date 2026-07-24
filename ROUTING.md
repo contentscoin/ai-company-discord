@@ -79,3 +79,15 @@ CEO(또는 Paperclip notifier)가 이슈 생성. Discord는 회의록, Paperclip
 ## 6. OpenCrab
 
 회의 **원문** 금지. CEO가 정제 요약만 Workmate pending → safety → pack (`workflow` / `paperclip-company-context` / `qa`).
+
+스테이징 전 **새니타이즈 린트 통과 필수**:
+
+```bash
+python3 scripts/companyctl.py lint --file summary.md   # 토큰·API키·이메일·스노우플레이크·원문 지표 검출
+```
+
+`BLOCK`(exit 1)이면 인제스트 금지 — 지목된 라인을 정제한 뒤 재실행. 통과해야 Workmate pending으로 넘깁니다. 린트는 시크릿 값을 출력하지 않고 종류·라인만 보고합니다.
+
+## 7. 프로토콜
+
+회의 마감 블록(DECISION/OPEN/ACTIONS)·Critic VERDICT·Loop PASS/FAIL의 정식 문법은 [PROTOCOLS.md](./PROTOCOLS.md). 마감 블록은 `companyctl decision`이 파싱해 정규화 JSON·Paperclip 이슈·주간 다이제스트로 흘려보냅니다.

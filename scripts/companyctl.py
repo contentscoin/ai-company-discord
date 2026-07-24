@@ -25,6 +25,7 @@ import datetime
 import hashlib
 import json
 import os
+import re
 import shutil
 import sys
 import time
@@ -673,6 +674,279 @@ def cmd_standup(args: argparse.Namespace) -> int:
 
 
 # --------------------------------------------------------------------------- #
+# Decision block parser (PROTOCOL v1 — see PROTOCOLS.md)
+# --------------------------------------------------------------------------- #
+DECISION_HEADERS = ("DECISION", "OPEN", "ACTIONS", "OWNER", "DUE", "PAPERCLIP")
+DUE_SUFFIX_RE = re.compile(r"\(DUE:\s*([^)]+)\)\s*$", re.IGNORECASE)
+
+
+def build_role_map(config: dict) -> dict:
+    """Map owner tokens (id / @ID / Title) to canonical role ids. board -> board."""
+    role_map = {"board": "board", "BOARD": "board", "Board": "board"}
+    for role in config.get("roles", []):
+        rid = role["id"]
+        role_map[rid] = rid
+        role_map[rid.upper()] = rid
+        title = role.get("title", "")
+        if title:
+            role_map[title.lower()] = rid
+    return role_map
+
+
+def resolve_owner(raw: str, role_map: dict, warnings: list) -> str | None:
+    key = raw.lstrip("@").strip()
+    for cand in (key, key.lower(), key.upper()):
+        if cand in role_map:
+            return role_map[cand]
+    warnings.append(f"unresolved owner: {raw.strip()}")
+    return key.lower() or None
+
+
+def parse_action(item: str, role_map: dict, warnings: list) -> dict:
+    due = None
+    m = DUE_SUFFIX_RE.search(item)
+    if m:
+        due = m.group(1).strip()
+        item = item[: m.start()].strip()
+    owner_raw, sep, task = item.partition(":")
+    if not sep:
+        warnings.append(f"action without an owner (missing ':'): {item}")
+        return {"owner": None, "task": item.strip(), "due": due}
+    return {"owner": resolve_owner(owner_raw, role_map, warnings), "task": task.strip(), "due": due}
+
+
+def parse_decision_block(text: str, role_map: dict) -> dict:
+    """Pure. Parse a meeting close block (MEETINGS.md) or the compact
+    OWNER/DUE form (ROUTING.md) into normalized lists."""
+    decisions: list[str] = []
+    open_items: list[str] = []
+    actions: list[dict] = []
+    warnings: list[str] = []
+    current = None
+    owner_field = None
+    due_field = None
+
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        header = None
+        after = ""
+        up = line.upper()
+        for h in DECISION_HEADERS:
+            if up.startswith(h + ":"):
+                header = h
+                after = line[len(h) + 1:].strip()
+                break
+        if header:
+            if header == "DECISION":
+                current = "decision"
+                if after:
+                    decisions.append(after)
+            elif header == "OPEN":
+                current = "open"
+                if after:
+                    open_items.append(after)
+            elif header == "ACTIONS":
+                current = "actions"
+                if after:
+                    actions.append(parse_action(after, role_map, warnings))
+            elif header == "OWNER":
+                owner_field = after
+            elif header == "DUE":
+                due_field = after
+            # PAPERCLIP: directive is ignored by the parser.
+            continue
+
+        item = line[1:].strip() if line.startswith("-") else line
+        if current == "decision":
+            decisions.append(item)
+        elif current == "open":
+            open_items.append(item)
+        elif current == "actions":
+            actions.append(parse_action(item, role_map, warnings))
+        else:
+            warnings.append(f"line outside any section ignored: {item}")
+
+    if owner_field and not actions and decisions:
+        actions.append(
+            {"owner": resolve_owner(owner_field, role_map, warnings),
+             "task": decisions[-1], "due": due_field}
+        )
+
+    return {"decisions": decisions, "open": open_items, "actions": actions, "warnings": warnings}
+
+
+def read_text_input(args: argparse.Namespace) -> str:
+    if getattr(args, "file", None):
+        return Path(args.file).read_text(encoding="utf-8")
+    return sys.stdin.read()
+
+
+def append_decision_log(hermes_home: Path, entry: dict) -> Path:
+    d = state_dir(hermes_home)
+    d.mkdir(parents=True, exist_ok=True)
+    log = d / "decisions.ndjson"
+    with log.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    return log
+
+
+def http_post_json(url: str, payload: dict, timeout: float = 5.0):
+    data = json.dumps(payload).encode()
+    req = urllib.request.Request(
+        url, data=data, method="POST", headers={"Content-Type": "application/json"}
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        body = resp.read()
+        return json.loads(body) if body else None
+
+
+def emit_paperclip(entry: dict, base_url: str) -> None:
+    issues = [
+        {"title": a["task"][:80], "body": a["task"], "owner": a.get("owner"), "due": a.get("due")}
+        for a in entry["actions"]
+        if a.get("task")
+    ]
+    if not issues:
+        print("(no ACTIONS to turn into Paperclip issues)")
+        return
+    try:
+        for iss in issues:
+            http_post_json(base_url.rstrip("/") + "/issues", iss)
+        print(f"Created {len(issues)} Paperclip issue(s) at {base_url}.")
+    except (urllib.error.URLError, OSError) as exc:
+        print(f"Paperclip not reachable ({exc}); emitting issue payloads instead:")
+        print(json.dumps(issues, ensure_ascii=False, indent=2))
+
+
+def cmd_decision(args: argparse.Namespace) -> int:
+    config = load_valid_config(Path(args.config))
+    role_map = build_role_map(config)
+    parsed = parse_decision_block(read_text_input(args), role_map)
+
+    for w in parsed["warnings"]:
+        print(f"warn: {w}", file=sys.stderr)
+    if not parsed["decisions"] and not parsed["actions"]:
+        print("ERROR: no DECISION/ACTIONS found — check the format (see PROTOCOLS.md).", file=sys.stderr)
+        return 2
+
+    entry = {
+        "date": datetime.date.today().isoformat(),
+        "decisions": parsed["decisions"],
+        "open": parsed["open"],
+        "actions": parsed["actions"],
+    }
+    if args.to_paperclip:
+        emit_paperclip(entry, args.paperclip_url)
+    print(json.dumps(entry, ensure_ascii=False, indent=2))
+    if not args.dry_run:
+        log = append_decision_log(resolve_hermes_home(args), entry)
+        print(f"\nLogged to {log}", file=sys.stderr)
+    return 0
+
+
+# --------------------------------------------------------------------------- #
+# Sanitize lint (pre-OpenCrab-ingest gate)
+# --------------------------------------------------------------------------- #
+SENSITIVE_RULES = [
+    ("discord-token", re.compile(r"\b[A-Za-z0-9_-]{24,28}\.[A-Za-z0-9_-]{6}\.[A-Za-z0-9_-]{27,}\b"), "FAIL"),
+    ("api-key",
+     re.compile(r"\b(sk-[A-Za-z0-9]{16,}|xox[baprs]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16}|"
+                r"ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{20,}|AIza[0-9A-Za-z_-]{35})\b"), "FAIL"),
+    ("email", re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b"), "FAIL"),
+    ("snowflake-id", re.compile(r"\b\d{17,20}\b"), "WARN"),
+]
+
+
+def scan_for_sensitive(text: str) -> list[tuple[str, int, str]]:
+    """Pure. Return (severity, line_no, kind). Never returns the secret value."""
+    findings: list[tuple[str, int, str]] = []
+    for i, line in enumerate(text.splitlines(), 1):
+        for kind, pattern, sev in SENSITIVE_RULES:
+            if pattern.search(line):
+                findings.append((sev, i, kind))
+    mentions = len(re.findall(r"@\w+", text))
+    times = len(re.findall(r"\b\d{1,2}:\d{2}\b", text))
+    if mentions >= 3 and times >= 2:
+        findings.append(("WARN", 0, "meeting-transcript-shape (summarize before ingest)"))
+    return findings
+
+
+def cmd_lint(args: argparse.Namespace) -> int:
+    findings = scan_for_sensitive(read_text_input(args))
+    if not findings:
+        print("OK: no sensitive patterns found — safe to stage for OpenCrab ingest")
+        return 0
+    print(f"BLOCK: {len(findings)} finding(s) — sanitize before ingest:")
+    for sev, line_no, kind in findings:
+        where = f"line {line_no}" if line_no else "document"
+        print(f"  {sev:4} {where}: {kind}")
+    return 1
+
+
+# --------------------------------------------------------------------------- #
+# Weekly digest (from the decision log)
+# --------------------------------------------------------------------------- #
+def read_decision_log(hermes_home: Path, start_iso: str, end_iso: str) -> list[dict]:
+    log = state_dir(hermes_home) / "decisions.ndjson"
+    if not log.is_file():
+        return []
+    entries = []
+    for line in log.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            e = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if start_iso <= e.get("date", "") <= end_iso:
+            entries.append(e)
+    return entries
+
+
+def render_digest(entries: list[dict], start_iso: str, end_iso: str) -> str:
+    decisions: list[str] = []
+    opens: list[str] = []
+    by_owner: dict[str, list[dict]] = {}
+    for e in entries:
+        decisions += e.get("decisions", [])
+        opens += e.get("open", [])
+        for a in e.get("actions", []):
+            by_owner.setdefault(a.get("owner") or "unassigned", []).append(a)
+
+    lines = [f"# 주간 브리핑 — {start_iso} ~ {end_iso}", ""]
+    lines.append(f"## 결정 ({len(decisions)})")
+    lines += [f"- {d}" for d in decisions] or ["- (없음)"]
+    lines += ["", f"## 미결 (Open) ({len(opens)})"]
+    lines += [f"- {o}" for o in opens] or ["- (없음)"]
+    lines += ["", "## 액션 (담당별)"]
+    if by_owner:
+        for owner in sorted(by_owner):
+            lines.append(f"### @{owner}")
+            for a in by_owner[owner]:
+                due = f" (DUE: {a['due']})" if a.get("due") else ""
+                lines.append(f"- {a.get('task', '')}{due}")
+    else:
+        lines.append("- (없음)")
+    return "\n".join(lines) + "\n"
+
+
+def cmd_digest(args: argparse.Namespace) -> int:
+    today = datetime.date.today()
+    if args.since:
+        start = args.since
+    else:
+        start = (today - datetime.timedelta(days=args.days)).isoformat()
+    end = args.until or today.isoformat()
+
+    entries = read_decision_log(resolve_hermes_home(args), start, end)
+    print(render_digest(entries, start, end))
+    return 0
+
+
+# --------------------------------------------------------------------------- #
 # Entry point
 # --------------------------------------------------------------------------- #
 def _add_hermes_home(parser: argparse.ArgumentParser) -> None:
@@ -717,6 +991,25 @@ def build_parser() -> argparse.ArgumentParser:
     p_stand.add_argument("--dry-run", action="store_true", help="print the message instead of posting")
     _add_hermes_home(p_stand)
     p_stand.set_defaults(func=cmd_standup)
+
+    p_dec = sub.add_parser("decision", help="parse a meeting close block -> normalized JSON / Paperclip")
+    p_dec.add_argument("--file", help="read the block from a file (default: stdin)")
+    p_dec.add_argument("--to-paperclip", action="store_true", help="create a Paperclip issue per ACTION")
+    p_dec.add_argument("--paperclip-url", default="http://127.0.0.1:3100", help="Paperclip base URL")
+    p_dec.add_argument("--dry-run", action="store_true", help="parse only; do not append to the decision log")
+    _add_hermes_home(p_dec)
+    p_dec.set_defaults(func=cmd_decision)
+
+    p_lint = sub.add_parser("lint", help="scan text for secrets/PII before OpenCrab ingest")
+    p_lint.add_argument("--file", help="read text from a file (default: stdin)")
+    p_lint.set_defaults(func=cmd_lint)
+
+    p_dig = sub.add_parser("digest", help="render a weekly brief from the decision log")
+    p_dig.add_argument("--days", type=int, default=7, help="window size in days (default: 7)")
+    p_dig.add_argument("--since", help="start date YYYY-MM-DD (overrides --days)")
+    p_dig.add_argument("--until", help="end date YYYY-MM-DD (default: today)")
+    _add_hermes_home(p_dig)
+    p_dig.set_defaults(func=cmd_digest)
 
     return parser
 

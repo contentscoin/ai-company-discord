@@ -149,5 +149,79 @@ class StandupTests(unittest.TestCase):
         self.assertIn("@GROWTH", body)
 
 
+class DecisionParserTests(unittest.TestCase):
+    def setUp(self):
+        self.role_map = companyctl.build_role_map(TEMPLATE)
+
+    def test_meetings_style_block(self):
+        block = (
+            "DECISION:\n- 목표 상향\n- 채용 보류\n"
+            "OPEN:\n- 가격 재검토\n"
+            "ACTIONS:\n- @CTO : 버그 수정 (DUE: 2026-08-01)\n- @Growth: 캠페인 초안\n"
+        )
+        parsed = companyctl.parse_decision_block(block, self.role_map)
+        self.assertEqual(parsed["decisions"], ["목표 상향", "채용 보류"])
+        self.assertEqual(parsed["open"], ["가격 재검토"])
+        self.assertEqual(parsed["actions"][0], {"owner": "cto", "task": "버그 수정", "due": "2026-08-01"})
+        self.assertEqual(parsed["actions"][1], {"owner": "growth", "task": "캠페인 초안", "due": None})
+        self.assertEqual(parsed["warnings"], [])
+
+    def test_compact_owner_form(self):
+        block = "DECISION: 스키마 확정\nOWNER: loop\nDUE: 2026-07-31\nPAPERCLIP: create-issue\n"
+        parsed = companyctl.parse_decision_block(block, self.role_map)
+        self.assertEqual(parsed["decisions"], ["스키마 확정"])
+        self.assertEqual(parsed["actions"], [{"owner": "loop", "task": "스키마 확정", "due": "2026-07-31"}])
+
+    def test_unresolved_owner_is_warned_not_lost(self):
+        parsed = companyctl.parse_decision_block("ACTIONS:\n- @Nobody : do X\n", self.role_map)
+        self.assertEqual(parsed["actions"][0]["owner"], "nobody")
+        self.assertTrue(any("unresolved owner" in w for w in parsed["warnings"]))
+
+    def test_title_and_board_resolve(self):
+        rm = self.role_map
+        warns: list = []
+        self.assertEqual(companyctl.resolve_owner("Loop Engineer", rm, warns), "loop")
+        self.assertEqual(companyctl.resolve_owner("board", rm, warns), "board")
+        self.assertEqual(companyctl.resolve_owner("@CTO", rm, warns), "cto")
+        self.assertEqual(warns, [])
+
+
+class SensitiveScanTests(unittest.TestCase):
+    # Fixtures are assembled at runtime so no secret-shaped literal lives in the
+    # source file (avoids tripping push-protection on a fabricated test value).
+    FAKE_DISCORD = ".".join(["A" * 26, "B" * 6, "C" * 30])
+    FAKE_KEY = "sk-" + "x" * 24
+    FAKE_EMAIL = "jane" + "@" + "example.com"
+
+    def test_detects_token_key_email(self):
+        text = f"note\n{self.FAKE_DISCORD}\n{self.FAKE_KEY}\n{self.FAKE_EMAIL}\n"
+        kinds = {k for _, _, k in companyctl.scan_for_sensitive(text)}
+        self.assertIn("discord-token", kinds)
+        self.assertIn("api-key", kinds)
+        self.assertIn("email", kinds)
+
+    def test_clean_summary_has_no_findings(self):
+        self.assertEqual(companyctl.scan_for_sensitive("이번 주 결정: 목표 상향, 채용 보류."), [])
+
+    def test_findings_never_contain_secret_value(self):
+        findings = companyctl.scan_for_sensitive(f"key {self.FAKE_KEY}\n")
+        self.assertFalse(any(self.FAKE_KEY in str(f) for f in findings))
+
+
+class DigestTests(unittest.TestCase):
+    def test_render_groups_actions_by_owner(self):
+        entries = [
+            {"date": "2026-07-23", "decisions": ["A"], "open": [], "actions": [{"owner": "cto", "task": "t1"}]},
+            {"date": "2026-07-24", "decisions": ["B"], "open": ["o1"],
+             "actions": [{"owner": "growth", "task": "t2", "due": "2026-08-05"}]},
+        ]
+        out = companyctl.render_digest(entries, "2026-07-23", "2026-07-24")
+        self.assertIn("## 결정 (2)", out)
+        self.assertIn("- A", out)
+        self.assertIn("### @cto", out)
+        self.assertIn("### @growth", out)
+        self.assertIn("(DUE: 2026-08-05)", out)
+
+
 if __name__ == "__main__":
     unittest.main()

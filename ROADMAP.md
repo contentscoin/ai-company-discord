@@ -114,9 +114,11 @@ flowchart LR
 의존성: Phase 1 (채널 `access[]`·category 메타데이터, map 파일 규약).
 **DoD**: 테스트 길드에서 bootstrap 2회 실행 → 2회차 "0 changes" · 채널 하나 삭제 후 재실행 → 그 채널만 재생성 · doctor가 토큰 중복 픽스처·`require_mention` 변조를 FAIL로 검출.
 
-### Phase 3 — 프로토콜 기계화: DECISION 문법 + 연동 (총 M, Phase 2와 병행 가능)
+### Phase 3 — 프로토콜 기계화: DECISION 문법 + 연동 (총 M, Phase 2와 병행 가능) — ✅ 구현됨
 
 목표: 산문 프로토콜을 버전 있는 스펙으로 승격, 결정→이슈·요약→ingest 경로에 도구를 부착.
+
+> 구현되어 이 PR에 포함. 텍스트 입력 기반이라 이 환경에서 엔드투엔드 검증 완료(Paperclip 부재 시 JSON 강등 포함). 골든 픽스처 테스트 CI 편입.
 
 | # | 산출물 | 파일 | 노력 |
 |---|--------|------|------|
@@ -165,7 +167,14 @@ flowchart LR
 11. `companyctl bootstrap` — JSON → Discord REST로 역할/카테고리/채널/권한 생성. 멱등(이름 매칭·삭제 금지), 기본 dry-run·`--apply` 필수, 토큰은 `DISCORD_SETUP_TOKEN` env로만, 채널 map은 `~/.hermes/ai-company/discord.map.json`
 12. `companyctl doctor` — 프로필 파일·토큰 중복(SHA-256, 값 미출력)·중복 `discord:` 키·config 드리프트 검사. `--online`은 토큰 유효성·채널 드리프트. Intent는 WARN 명시
 13. `companyctl standup post [--dry-run]` + `templates/cron/crontab.example` — Hermes 내장 cron이 1급 경로, 이건 fallback. MEETINGS.md에 스케줄링 절
-14. `tests/test_companyctl.py` — 순수 로직 12개 유닛테스트 (계획 멱등성·토큰 중복·렌더). SETUP.md를 bootstrap/doctor 흐름으로 갱신
+14. `tests/test_companyctl.py` — 순수 로직 유닛테스트 (계획 멱등성·토큰 중복·렌더). SETUP.md를 bootstrap/doctor 흐름으로 갱신
+
+**Phase 3 구현 (프로토콜 기계화)**
+
+15. `PROTOCOLS.md` — PROTOCOL v1: DECISION/OPEN/ACTIONS 문법(EBNF)·컴팩트 OWNER/DUE·Critic VERDICT·Loop PASS/FAIL. Critic/Loop SOUL은 스펙 참조로 dedup
+16. `companyctl decision` — 마감 블록(2가지 형식) → 정규화 JSON, owner를 role-id로 매핑, `--to-paperclip`(부재 시 이슈 JSON 강등), 결정 로그 ndjson append
+17. `companyctl lint` — ingest 전 새니타이즈: 토큰·API키·이메일·스노우플레이크·원문 지표. 시크릿 값 미출력. ROUTING.md §6에 린트 게이트 삽입
+18. `companyctl digest` — 결정 로그 → 주간 브리핑 마크다운(#briefs용). 골든 픽스처 테스트 8건 추가(총 20건)
 
 ## 7. 비목표 (Non-goals)
 

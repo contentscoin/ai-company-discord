@@ -79,6 +79,7 @@ hermes -p critic gateway start
 | [CHANNELS.md](./CHANNELS.md) | Categories, permissions, mention rules |
 | [ROUTING.md](./ROUTING.md) | GJC roles ↔ executives ↔ Cursor |
 | [MEETINGS.md](./MEETINGS.md) | Exec meeting / standup protocols |
+| [PROTOCOLS.md](./PROTOCOLS.md) | Machine-readable DECISION / VERDICT / PASS-FAIL specs (PROTOCOL v1) |
 | [ROADMAP.md](./ROADMAP.md) | Enhancement roadmap (phases 1–4, upstream boundaries) |
 | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) | Symptom → cause → fix tables |
 | `profiles/*/SOUL.md` | Independent souls |
