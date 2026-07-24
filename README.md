@@ -18,6 +18,33 @@ Role routing follows the spirit of [GJC multivendor setup](https://github.com/pr
 | Knowledge | OpenCrab + Workmate ingest |
 | Model routing (optional) | GJC `daily` / `coding-sprint` / `cyber-cop` |
 
+## Architecture
+
+```mermaid
+flowchart LR
+    B["Board (human)"] -->|"agenda · approvals · decisions"| DC
+
+    subgraph DC["Discord — meeting plane"]
+        CH1["#board-you · #approvals"]
+        CH2["#exec-meeting · #standup · #war-room"]
+        CH3["#dev · #loop · #growth"]
+        CH4["#ingest-review · #briefs"]
+    end
+
+    subgraph HP["Hermes profiles x5 (isolated bot tokens)"]
+        CEO["CEO - orchestration"]
+        CTO["CTO - implementation (Cursor primary)"]
+        LOOP["Loop - DoD verification"]
+        GROWTH["Growth - SNS/content"]
+        CRITIC["Critic - cross-family review"]
+    end
+
+    DC <-->|"@mention"| HP
+    CEO -->|"DECISION → issue"| PC["Paperclip - execution source of truth"]
+    CEO -->|"sanitized summaries only"| OC["OpenCrab - knowledge (Graph RAG)"]
+    CTO --- CUR["Cursor + Codex/Claude satellites"]
+```
+
 ## Quick start
 
 ```bash
@@ -49,6 +76,8 @@ hermes -p critic gateway start
 | [CHANNELS.md](./CHANNELS.md) | Categories, permissions, mention rules |
 | [ROUTING.md](./ROUTING.md) | GJC roles ↔ executives ↔ Cursor |
 | [MEETINGS.md](./MEETINGS.md) | Exec meeting / standup protocols |
+| [ROADMAP.md](./ROADMAP.md) | Enhancement roadmap (phases 1–4, upstream boundaries) |
+| [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) | Symptom → cause → fix tables |
 | `profiles/*/SOUL.md` | Independent souls |
 | `templates/company.discord.json` | Machine-readable company template |
 

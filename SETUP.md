@@ -42,7 +42,7 @@
 ## 3. Hermes 프로필 스캐폴드
 
 ```bash
-./docs/ai-company/scripts/scaffold-profiles.sh
+./scripts/scaffold-profiles.sh
 ```
 
 생성 위치:
@@ -107,6 +107,7 @@ platform_toolsets:
 - 토큰 중복 → gateway 로그의 conflict 메시지
 - 멘션 없이 전원 응답 → `require_mention: true` 확인
 - 히스토리 무시 → `history_backfill` / Message Content Intent
+- 그 외 증상은 [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) 참고
 
 ## 7. Paperclip / OpenCrab (선택)
 
