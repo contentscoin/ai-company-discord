@@ -1,0 +1,19 @@
+# Shared Hermes Discord config template — copy into each profile as config.yaml
+# Secrets stay in .env (DISCORD_BOT_TOKEN). Do not commit real tokens.
+
+discord:
+  require_mention: true
+  auto_thread: true
+  history_backfill: true
+  history_backfill_limit: 50
+  reactions: true
+  # free_response_channels: "STANDUP_CHANNEL_ID"  # CEO만 standup에 설정 권장
+
+platform_toolsets:
+  discord: [hermes-discord]
+  # telegram: [hermes-telegram]  # DM 핫라인만 쓸 때 활성화
+
+# Model: set per profile / provider. Cursor-primary work is outside Hermes for CTO.
+# Example Nous/OpenRouter style — adjust to your provider:
+# model:
+#   default: anthropic/claude-sonnet-4

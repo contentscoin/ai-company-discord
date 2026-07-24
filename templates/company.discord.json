@@ -1,0 +1,85 @@
+{
+  "name": "solo-founder-discord",
+  "version": "0.1.0",
+  "meetingChannel": "discord",
+  "hotlineChannel": "telegram-dm-optional",
+  "controlPlane": "paperclip",
+  "knowledge": {
+    "primary": "opencrab",
+    "ingestSkill": "workmate-opencrab-ingest",
+    "profileEqualsProject": true
+  },
+  "devCenter": {
+    "primary": "cursor",
+    "satellites": ["codex", "claude"],
+    "gjcDefaultBundle": "daily"
+  },
+  "roles": [
+    {
+      "id": "ceo",
+      "title": "CEO",
+      "hermesProfile": "ceo",
+      "discordBot": "AI-CEO",
+      "gjcRole": "default",
+      "runtime": "hermes"
+    },
+    {
+      "id": "cto",
+      "title": "CTO",
+      "hermesProfile": "cto",
+      "discordBot": "AI-CTO",
+      "gjcRole": "executor",
+      "runtime": "cursor",
+      "satellites": ["codex", "claude"]
+    },
+    {
+      "id": "loop",
+      "title": "Loop Engineer",
+      "hermesProfile": "loop",
+      "discordBot": "AI-Loop",
+      "gjcRole": "architect",
+      "runtime": "hermes"
+    },
+    {
+      "id": "growth",
+      "title": "Growth Lead",
+      "hermesProfile": "growth",
+      "discordBot": "AI-Growth",
+      "gjcRole": null,
+      "runtime": "hermes"
+    },
+    {
+      "id": "critic",
+      "title": "Critic",
+      "hermesProfile": "critic",
+      "discordBot": "AI-Critic",
+      "gjcRole": "critic",
+      "runtime": "hermes",
+      "crossFamily": true
+    }
+  ],
+  "discord": {
+    "categories": ["board", "meetings", "work", "knowledge"],
+    "channels": [
+      "board-you",
+      "approvals",
+      "exec-meeting",
+      "standup",
+      "war-room",
+      "dev",
+      "loop",
+      "growth",
+      "paperclip-feed",
+      "ingest-review",
+      "briefs"
+    ],
+    "requireMention": true,
+    "autoThread": true
+  },
+  "references": [
+    "https://github.com/project820/gjc-multivendor-setup-guide",
+    "https://github.com/paperclipai/paperclip",
+    "https://github.com/NousResearch/hermes-agent",
+    "https://github.com/contentscoin/workmate-opencrab-ingest-skill"
+  ]
+}
