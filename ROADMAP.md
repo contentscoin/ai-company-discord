@@ -81,9 +81,11 @@ flowchart LR
 
 노력 척도: **S** ≤ 반나절 · **M** = 1–3일 · **L** = 1주+
 
-### Phase 1 — 기반 정비: SSoT 전환 + 문서 정비 (총 M)
+### Phase 1 — 기반 정비: SSoT 전환 + 문서 정비 (총 M) — ✅ 구현됨
 
 목표: `company.discord.json`이 실제 진실원천이 되고, 문서만으로 막히던 온보딩 지점을 제거.
+
+> 이 단계는 구현되어 이 PR에 포함되었습니다. 아래 표는 실제 산출물입니다.
 
 | # | 산출물 | 파일 | 노력 |
 |---|--------|------|------|
@@ -138,14 +140,23 @@ flowchart LR
 의존성: Phase 2 (REST 유틸·map), Phase 3 (린트·결정 로그).
 **DoD**: 토큰 포함 스레드는 게시 거부 · status가 5 프로필 상태를 오류 없이 요약.
 
-## 6. Quick Wins — 이 PR에 포함된 것
+## 6. 이 PR에 포함된 것
+
+**기획 + 문서 퀵윈**
 
 1. 본 기획서 (`ROADMAP.md`)
 2. [SETUP.md](./SETUP.md) §3 경로 버그 수정 — `./docs/ai-company/scripts/…`(모노레포 추출 전 잔재) → `./scripts/scaffold-profiles.sh`
 3. [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) — 증상→원인→해결 표 (CEO config 중복 `discord:` 키 함정 포함)
 4. [README.md](./README.md) 아키텍처 다이어그램 + Docs 표 갱신
 
-스크립트는 이 PR에 없음 — 스키마·CLI는 Phase 1의 JSON 재구조와 함께 가야 이중작업이 없습니다.
+**Phase 1 구현 (SSoT 전환)**
+
+5. `templates/company.discord.json` v0.2 — 채널 객체화(category/access/freeResponse), `meetings` cron·`protocolVersion` 필드
+6. `templates/company.schema.json` — 편집기용 JSON Schema 계약
+7. `scripts/companyctl.py` — 단일 CLI. `validate`(스키마 + 파일시스템 교차 검증), `scaffold`(JSON 기반, 멱등). 후속 Phase의 서브커맨드가 여기 붙습니다
+8. `scripts/scaffold-profiles.sh` → `companyctl.py scaffold` 호환 래퍼로 축소 + `scripts/companyctl.ps1`(Windows). scaffold의 CEO config 중복 `discord:` 키 함정 제거
+9. `scripts/check_links.py` + `.github/workflows/ci.yml` — CI가 validate·링크·shellcheck로 SSoT 보호
+10. `WINDOWS.md` 재작성(운영 관점) + publish 스크립트 deprecated 표기
 
 ## 7. 비목표 (Non-goals)
 

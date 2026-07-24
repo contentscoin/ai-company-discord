@@ -1,6 +1,8 @@
 {
+  "$schema": "./company.schema.json",
   "name": "solo-founder-discord",
-  "version": "0.1.0",
+  "version": "0.2.0",
+  "protocolVersion": "1",
   "meetingChannel": "discord",
   "hotlineChannel": "telegram-dm-optional",
   "controlPlane": "paperclip",
@@ -13,6 +15,11 @@
     "primary": "cursor",
     "satellites": ["codex", "claude"],
     "gjcDefaultBundle": "daily"
+  },
+  "meetings": {
+    "timezone": "Asia/Seoul",
+    "standupCron": "0 9 * * 1-5",
+    "execMeetingCron": "0 10 * * 1"
   },
   "roles": [
     {
@@ -59,22 +66,79 @@
     }
   ],
   "discord": {
+    "requireMention": true,
+    "autoThread": true,
     "categories": ["board", "meetings", "work", "knowledge"],
     "channels": [
-      "board-you",
-      "approvals",
-      "exec-meeting",
-      "standup",
-      "war-room",
-      "dev",
-      "loop",
-      "growth",
-      "paperclip-feed",
-      "ingest-review",
-      "briefs"
-    ],
-    "requireMention": true,
-    "autoThread": true
+      {
+        "name": "board-you",
+        "category": "board",
+        "purpose": "당신 ↔ CEO 전략 1:1에 가까운 공개 보드",
+        "access": ["board", "ceo"]
+      },
+      {
+        "name": "approvals",
+        "category": "board",
+        "purpose": "예산·채용·배포·발행 승인 (해당 본부장은 안건별로 초대)",
+        "access": ["board", "ceo"]
+      },
+      {
+        "name": "exec-meeting",
+        "category": "meetings",
+        "purpose": "주간/임시 임원 회의 (스레드=안건)",
+        "access": ["board", "exec"]
+      },
+      {
+        "name": "standup",
+        "category": "meetings",
+        "purpose": "매일 비동기 스탠드업 (cron 자동 포스트 허용 채널)",
+        "access": ["exec"],
+        "freeResponse": true
+      },
+      {
+        "name": "war-room",
+        "category": "meetings",
+        "purpose": "장애·위기·비가역 결정",
+        "access": ["board", "ceo", "cto", "critic"]
+      },
+      {
+        "name": "dev",
+        "category": "work",
+        "purpose": "구현·PR·Cursor/Codex 알림",
+        "access": ["cto", "loop", "critic"]
+      },
+      {
+        "name": "loop",
+        "category": "work",
+        "purpose": "DoD·VALIDATION·리뷰 루프",
+        "access": ["loop", "cto", "critic"]
+      },
+      {
+        "name": "growth",
+        "category": "work",
+        "purpose": "SNS·캘린더·콘텐츠",
+        "access": ["growth", "ceo"]
+      },
+      {
+        "name": "paperclip-feed",
+        "category": "work",
+        "purpose": "Paperclip 이슈 알림 미러 (선택)",
+        "access": ["exec"],
+        "optional": true
+      },
+      {
+        "name": "ingest-review",
+        "category": "knowledge",
+        "purpose": "OpenCrab manual-review 후보 논의",
+        "access": ["board", "ceo"]
+      },
+      {
+        "name": "briefs",
+        "category": "knowledge",
+        "purpose": "주간 CEO 브리핑 아카이브",
+        "access": ["board", "exec"]
+      }
+    ]
   },
   "references": [
     "https://github.com/project820/gjc-multivendor-setup-guide",

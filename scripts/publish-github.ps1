@@ -1,6 +1,8 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
+  DEPRECATED: one-time bootstrap to first-publish this repo. It is already
+  public, so day-to-day operation does not need this. Kept for history only.
   Create public contentscoin/ai-company-discord and push this folder.
   Run in PowerShell where `gh` is logged in as an account that can create repos.
 #>

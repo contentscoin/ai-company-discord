@@ -41,9 +41,14 @@
 
 ## 3. Hermes 프로필 스캐폴드
 
+프로필 목록은 `templates/company.discord.json`(단일 진실원천)에서 읽습니다. 먼저 설정을 검증한 뒤 스캐폴드하세요:
+
 ```bash
-./scripts/scaffold-profiles.sh
+python3 scripts/companyctl.py validate     # 설정 검증 (SOUL.md·채널·access 교차 확인)
+./scripts/scaffold-profiles.sh             # = python3 scripts/companyctl.py scaffold
 ```
+
+> Windows는 `.\scripts\companyctl.ps1 scaffold` — [WINDOWS.md](./WINDOWS.md) 참고.
 
 생성 위치:
 
