@@ -131,9 +131,11 @@ flowchart LR
 의존성: Phase 1 (role-id 매핑). Phase 2와 독립.
 **DoD**: MEETINGS.md §A.4 예시 블록이 골든 JSON과 round-trip · 형식 위반 → exit≠0 + 오류 라인 · 린트가 심어둔 시크릿 픽스처 전부 검출 + 정제 요약 샘플 통과 · digest가 샘플 ndjson을 정확히 렌더.
 
-### Phase 4 — 운영 관측성 (선택, 총 M~L)
+### Phase 4 — 운영 관측성 (선택, 총 M~L) — ✅ 구현됨
 
-목표: 회의 이력·비용 가시성. 한계효용이 낮아 명시적 후순위.
+목표: 회의 이력·비용 가시성. 한계효용이 낮아 명시적 후순위였으나 함께 구현.
+
+> 구현되어 이 PR에 포함. 순수 로직(회의록 렌더·새니타이즈 게이트·slug·status 집계)은 테스트로 검증. archive의 Discord fetch/post는 토큰 필요(사용자 환경).
 
 | # | 산출물 | 파일 | 노력 |
 |---|--------|------|------|
@@ -174,7 +176,13 @@ flowchart LR
 15. `PROTOCOLS.md` — PROTOCOL v1: DECISION/OPEN/ACTIONS 문법(EBNF)·컴팩트 OWNER/DUE·Critic VERDICT·Loop PASS/FAIL. Critic/Loop SOUL은 스펙 참조로 dedup
 16. `companyctl decision` — 마감 블록(2가지 형식) → 정규화 JSON, owner를 role-id로 매핑, `--to-paperclip`(부재 시 이슈 JSON 강등), 결정 로그 ndjson append
 17. `companyctl lint` — ingest 전 새니타이즈: 토큰·API키·이메일·스노우플레이크·원문 지표. 시크릿 값 미출력. ROUTING.md §6에 린트 게이트 삽입
-18. `companyctl digest` — 결정 로그 → 주간 브리핑 마크다운(#briefs용). 골든 픽스처 테스트 8건 추가(총 20건)
+18. `companyctl digest` — 결정 로그 → 주간 브리핑 마크다운(#briefs용). 골든 픽스처 테스트 추가
+
+**Phase 4 구현 (관측성)**
+
+19. `companyctl archive --thread <id> [--post-briefs]` — 회의 스레드 → 새니타이즈 린트 통과한 회의록만 `~/.hermes/ai-company/minutes/`에 저장. 토큰 포함 스레드는 저장·게시 거부
+20. `companyctl status` — 프로필·채널 map·결정 로그·마지막 standup 한 화면 요약
+21. 비용 가시성 — role별 `modelHint` 필드 + doctor WARN + `COSTS.md`(Paperclip 미사용자용). 자체 추적 로직 없음. 테스트 총 26건
 
 ## 7. 비목표 (Non-goals)
 

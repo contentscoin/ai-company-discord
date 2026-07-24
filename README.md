@@ -82,6 +82,7 @@ hermes -p critic gateway start
 | [PROTOCOLS.md](./PROTOCOLS.md) | Machine-readable DECISION / VERDICT / PASS-FAIL specs (PROTOCOL v1) |
 | [ROADMAP.md](./ROADMAP.md) | Enhancement roadmap (phases 1–4, upstream boundaries) |
 | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) | Symptom → cause → fix tables |
+| [COSTS.md](./COSTS.md) | Cost visibility for non-Paperclip users (modelHint) |
 | `profiles/*/SOUL.md` | Independent souls |
 | `templates/company.discord.json` | Machine-readable company template |
 

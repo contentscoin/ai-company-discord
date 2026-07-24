@@ -64,7 +64,8 @@
           "gjcRole": { "type": ["string", "null"] },
           "runtime": { "type": "string", "minLength": 1 },
           "satellites": { "type": "array", "items": { "type": "string" } },
-          "crossFamily": { "type": "boolean" }
+          "crossFamily": { "type": "boolean" },
+          "modelHint": { "type": "string", "description": "Model/provider hint for cost visibility (see COSTS.md)." }
         }
       }
     },

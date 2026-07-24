@@ -223,5 +223,51 @@ class DigestTests(unittest.TestCase):
         self.assertIn("(DUE: 2026-08-05)", out)
 
 
+class ArchiveTests(unittest.TestCase):
+    def test_render_minutes_chronological(self):
+        msgs = [
+            {"author": {"username": "CEO"}, "content": "안건 정리"},
+            {"author": {"username": "CTO"}, "content": ""},  # empty skipped
+            {"author": {"username": "Loop"}, "content": "DoD 통과"},
+        ]
+        out = companyctl.render_minutes("2026-W30 · MRR", msgs)
+        self.assertIn("# 회의록 — 2026-W30 · MRR", out)
+        self.assertIn("- **CEO**: 안건 정리", out)
+        self.assertIn("- **Loop**: DoD 통과", out)
+        self.assertNotIn("**CTO**", out)
+
+    def test_minutes_with_token_are_flagged(self):
+        secret = ".".join(["A" * 26, "B" * 6, "C" * 30])
+        msgs = [{"author": {"username": "x"}, "content": f"token {secret}"}]
+        minutes = companyctl.render_minutes("t", msgs)
+        self.assertTrue(companyctl.scan_for_sensitive(minutes))  # would BLOCK the post
+
+    def test_chunk_text_respects_size(self):
+        chunks = companyctl.chunk_text("x" * 4100, size=1900)
+        self.assertEqual(len(chunks), 3)
+        self.assertTrue(all(len(c) <= 1900 for c in chunks))
+
+    def test_slugify(self):
+        self.assertEqual(companyctl.slugify("2026-W30 · MRR 점검"), "2026-w30-mrr")
+
+
+class DoctorModelHintTests(unittest.TestCase):
+    def test_missing_modelhint_warns(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            pdir = home / "profiles" / "ceo"
+            pdir.mkdir(parents=True)
+            (pdir / "SOUL.md").write_text("s")
+            (pdir / "config.yaml").write_text("discord:\n")
+            (pdir / ".env").write_text("DISCORD_BOT_TOKEN=X\n")
+            cfg = {"roles": [{"id": "ceo", "hermesProfile": "ceo"}]}  # no modelHint
+            rows = companyctl.doctor_offline(cfg, home)
+            self.assertTrue(any("no modelHint" in m for _, m in rows))
+
+    def test_shipped_template_roles_all_have_modelhint(self):
+        self.assertTrue(all(r.get("modelHint") for r in TEMPLATE["roles"]))
+
+
 if __name__ == "__main__":
     unittest.main()

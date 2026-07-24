@@ -567,6 +567,10 @@ def doctor_offline(config: dict, hermes_home: Path) -> list[tuple[str, str]]:
                 ("FAIL", f"shared DISCORD_BOT_TOKEN across profiles: {', '.join(sorted(owners))}")
             )
 
+    for role in config["roles"]:
+        if not role.get("modelHint"):
+            rows.append(("WARN", f"{role['id']}: no modelHint (cost visibility — see COSTS.md)"))
+
     rows.append(
         ("WARN", "Message Content Intent cannot be verified via API — confirm it is ON in the Developer Portal")
     )
@@ -669,6 +673,8 @@ def cmd_standup(args: argparse.Namespace) -> int:
     except DiscordError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
+    state_dir(hermes_home).mkdir(parents=True, exist_ok=True)
+    (state_dir(hermes_home) / "last_standup.txt").write_text(today, encoding="utf-8")
     print(f"Posted standup to #standup ({channel_id}).")
     return 0
 
@@ -947,6 +953,149 @@ def cmd_digest(args: argparse.Namespace) -> int:
 
 
 # --------------------------------------------------------------------------- #
+# Archive (meeting thread -> sanitized minutes)
+# --------------------------------------------------------------------------- #
+def render_minutes(thread_name: str, messages: list[dict]) -> str:
+    """Pure. Render Discord messages (chronological) into markdown minutes."""
+    lines = [f"# 회의록 — {thread_name}", ""]
+    for m in messages:
+        author = (m.get("author") or {}).get("username", "unknown")
+        content = (m.get("content") or "").strip()
+        if content:
+            lines.append(f"- **{author}**: {content}")
+    return "\n".join(lines) + "\n"
+
+
+def chunk_text(text: str, size: int = 1900) -> list[str]:
+    return [text[i : i + size] for i in range(0, len(text), size)] or [""]
+
+
+def slugify(name: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+    return slug or "thread"
+
+
+def fetch_thread(thread_id: str, token: str) -> tuple[str, list[dict]]:
+    info = discord_request("GET", f"/channels/{thread_id}", token)
+    name = (info or {}).get("name", str(thread_id))
+    messages: list[dict] = []
+    before = None
+    while True:
+        path = f"/channels/{thread_id}/messages?limit=100"
+        if before:
+            path += f"&before={before}"
+        batch = discord_request("GET", path, token)
+        if not batch:
+            break
+        messages.extend(batch)
+        if len(batch) < 100:
+            break
+        before = batch[-1]["id"]
+    messages.reverse()  # Discord returns newest-first
+    return name, messages
+
+
+def cmd_archive(args: argparse.Namespace) -> int:
+    hermes_home = resolve_hermes_home(args)
+    token = os.environ.get("DISCORD_SETUP_TOKEN") or read_env_value(
+        hermes_home / "profiles" / "ceo" / ".env", "DISCORD_BOT_TOKEN"
+    )
+    if not token:
+        print("ERROR: no token (set DISCORD_SETUP_TOKEN or fill ceo/.env).", file=sys.stderr)
+        return 2
+    try:
+        name, messages = fetch_thread(args.thread, token)
+    except DiscordError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 2
+
+    minutes = render_minutes(name, messages)
+    findings = scan_for_sensitive(minutes)
+    if findings:
+        print(f"BLOCK: minutes contain {len(findings)} sensitive pattern(s) — not saved or posted:")
+        for sev, line_no, kind in findings:
+            where = f"line {line_no}" if line_no else "document"
+            print(f"  {sev:4} {where}: {kind}")
+        return 1
+
+    out_dir = state_dir(hermes_home) / "minutes"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_file = out_dir / f"{datetime.date.today().isoformat()}-{slugify(name)}.md"
+    out_file.write_text(minutes, encoding="utf-8")
+    print(f"Saved minutes: {out_file} ({len(messages)} messages)")
+
+    if args.post_briefs:
+        mp = map_path(hermes_home)
+        if not mp.is_file():
+            print("WARN: no channel map — skipping --post-briefs.", file=sys.stderr)
+            return 0
+        channel_id = json.loads(mp.read_text(encoding="utf-8")).get("channels", {}).get("briefs")
+        if not channel_id:
+            print("WARN: #briefs not in channel map — skipping post.", file=sys.stderr)
+            return 0
+        try:
+            for chunk in chunk_text(minutes):
+                discord_request("POST", f"/channels/{channel_id}/messages", token, {"content": chunk})
+            print(f"Posted minutes to #briefs ({channel_id}).")
+        except DiscordError as exc:
+            print(f"ERROR posting to #briefs: {exc}", file=sys.stderr)
+            return 2
+    return 0
+
+
+# --------------------------------------------------------------------------- #
+# Status (one-screen operational summary)
+# --------------------------------------------------------------------------- #
+def read_all_decisions(hermes_home: Path) -> list[dict]:
+    log = state_dir(hermes_home) / "decisions.ndjson"
+    if not log.is_file():
+        return []
+    out = []
+    for line in log.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line:
+            try:
+                out.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+    return out
+
+
+def cmd_status(args: argparse.Namespace) -> int:
+    config = load_valid_config(Path(args.config))
+    hermes_home = resolve_hermes_home(args)
+    profiles_dir = hermes_home / "profiles"
+
+    scaffolded = [r["hermesProfile"] for r in config["roles"]
+                  if (profiles_dir / r["hermesProfile"]).is_dir()]
+    print(f"profiles   : {len(scaffolded)}/{len(config['roles'])} scaffolded "
+          f"({', '.join(scaffolded) or 'none'})")
+
+    mp = map_path(hermes_home)
+    if mp.is_file():
+        data = json.loads(mp.read_text(encoding="utf-8"))
+        print(f"discord map: guild {data.get('guildId', '?')}, "
+              f"{len(data.get('channels', {}))} channels")
+    else:
+        print("discord map: none (run `companyctl bootstrap`)")
+
+    decisions = read_all_decisions(hermes_home)
+    if decisions:
+        last = decisions[-1]
+        print(f"decisions  : {len(decisions)} logged, last {last.get('date', '?')}")
+        for d in decisions[-3:]:
+            first = (d.get("decisions") or ["(none)"])[0]
+            print(f"             · {d.get('date', '?')}: {first}")
+    else:
+        print("decisions  : none logged")
+
+    marker = state_dir(hermes_home) / "last_standup.txt"
+    print(f"last standup: {marker.read_text(encoding='utf-8').strip() if marker.is_file() else 'never'}")
+    print("gateways   : run `hermes -p <name> gateway status` (liveness not tracked here)")
+    return 0
+
+
+# --------------------------------------------------------------------------- #
 # Entry point
 # --------------------------------------------------------------------------- #
 def _add_hermes_home(parser: argparse.ArgumentParser) -> None:
@@ -1010,6 +1159,16 @@ def build_parser() -> argparse.ArgumentParser:
     p_dig.add_argument("--until", help="end date YYYY-MM-DD (default: today)")
     _add_hermes_home(p_dig)
     p_dig.set_defaults(func=cmd_digest)
+
+    p_arch = sub.add_parser("archive", help="export a meeting thread to sanitized local minutes")
+    p_arch.add_argument("--thread", required=True, help="Discord thread (channel) id to export")
+    p_arch.add_argument("--post-briefs", action="store_true", help="also post the minutes to #briefs")
+    _add_hermes_home(p_arch)
+    p_arch.set_defaults(func=cmd_archive)
+
+    p_stat = sub.add_parser("status", help="one-screen summary of profiles/map/decisions")
+    _add_hermes_home(p_stat)
+    p_stat.set_defaults(func=cmd_status)
 
     return parser
 
