@@ -14,7 +14,16 @@
   "devCenter": {
     "primary": "cursor",
     "satellites": ["codex", "claude"],
-    "gjcDefaultBundle": "daily"
+    "gjcDefaultBundle": "daily",
+    "frameworks": [
+      {
+        "name": "akanjs",
+        "kind": "fullstack-ts",
+        "status": "candidate",
+        "ref": "https://github.com/akan-team/akanjs",
+        "note": "Bun+React+SQLite, schema SSoT -> API -> UI codegen; ships web/mobile/server from one TS source. Provides AI-agent guideline generation."
+      }
+    ]
   },
   "meetings": {
     "timezone": "Asia/Seoul",
@@ -144,6 +153,7 @@
     "https://github.com/project820/gjc-multivendor-setup-guide",
     "https://github.com/paperclipai/paperclip",
     "https://github.com/NousResearch/hermes-agent",
-    "https://github.com/contentscoin/workmate-opencrab-ingest-skill"
+    "https://github.com/contentscoin/workmate-opencrab-ingest-skill",
+    "https://github.com/akan-team/akanjs"
   ]
 }

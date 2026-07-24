@@ -15,7 +15,31 @@
     "hotlineChannel": { "type": "string" },
     "controlPlane": { "type": "string" },
     "knowledge": { "type": "object" },
-    "devCenter": { "type": "object" },
+    "devCenter": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "primary": { "type": "string" },
+        "satellites": { "type": "array", "items": { "type": "string" } },
+        "gjcDefaultBundle": { "type": "string" },
+        "frameworks": {
+          "type": "array",
+          "description": "Optional product frameworks the dev agents build with (not orchestration tooling).",
+          "items": {
+            "type": "object",
+            "required": ["name"],
+            "additionalProperties": true,
+            "properties": {
+              "name": { "type": "string" },
+              "kind": { "type": "string" },
+              "status": { "type": "string", "enum": ["candidate", "adopted", "deprecated"] },
+              "ref": { "type": "string" },
+              "note": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
     "meetings": {
       "type": "object",
       "additionalProperties": true,

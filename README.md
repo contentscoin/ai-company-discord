@@ -15,8 +15,11 @@ Role routing follows the spirit of [GJC multivendor setup](https://github.com/pr
 | Meeting / souls | Discord + Hermes profiles |
 | Org / tasks / budgets | Paperclip |
 | Dev center | **Cursor** (+ Codex / Claude satellites) |
+| Product framework (optional) | [akanjs](https://github.com/akan-team/akanjs) — full-stack TS, candidate |
 | Knowledge | OpenCrab + Workmate ingest |
 | Model routing (optional) | GJC `daily` / `coding-sprint` / `cyber-cop` |
+
+> **Dev center vs product framework** — Cursor/Codex/Claude are the coding *agents*; a product framework is what they build *in*. If the company ships full-stack TypeScript, [akanjs](https://github.com/akan-team/akanjs) (Bun+React+SQLite, schema-as-source-of-truth codegen, AI-agent guideline generation) is a candidate. Not mandated — the stack choice is a CEO/Board decision.
 
 ## Architecture
 

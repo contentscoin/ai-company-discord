@@ -179,6 +179,10 @@ flowchart LR
 | Hermes/GJC 패치·포크 | 업스트림 원칙 위반 |
 | 멀티 컴퍼니 별도 지원 | `companyctl --config <path>`로 0원 처리 |
 
+### 제품 프레임워크 후보 — akanjs
+
+[akanjs](https://github.com/akan-team/akanjs)(풀스택 TS: Bun+React+SQLite, 스키마 SSoT→API→UI 코드젠)는 **운영 도구가 아니라 제품 개발 스택** 레이어에 속합니다. 컨트롤룸(companyctl 등)을 akanjs로 재작성하지 않습니다 — "경량·Python stdlib" 원칙과 무관. 대신 개발 에이전트가 활용할 수 있는 **후보 프레임워크**로 반영: `company.discord.json`의 `devCenter.frameworks`(status=candidate) + CTO/Loop SOUL 노트(akanjs가 생성하는 AI 에이전트 가이드라인·스키마 SSoT 규약 준수). 채택 여부는 CEO·Board 결정이며 강제하지 않습니다.
+
 ## 8. 리스크 · 오픈 퀘스천
 
 | # | 리스크 | 대응 |
