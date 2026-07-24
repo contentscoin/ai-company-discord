@@ -10,8 +10,11 @@ Subcommands:
   bootstrap   create Discord roles/categories/channels from the JSON (idempotent)
   doctor      health-check profiles, tokens, and config for drift
   standup     post (or preview) the daily standup message to #standup
-
-Later roadmap phases add: decision, lint, digest, archive, status. See ROADMAP.md.
+  decision    parse a meeting close block -> normalized JSON / Paperclip issues
+  lint        scan text for secrets/PII before OpenCrab ingest
+  digest      render a weekly brief from the decision log
+  archive     export a meeting thread to sanitized local minutes
+  status      one-screen summary of profiles/map/decisions
 
 Secrets are never read from arguments and never printed. Runtime state
 (channel maps, decision logs) lives under ~/.hermes/ai-company/, never in
@@ -93,6 +96,17 @@ def state_dir(hermes_home: Path) -> Path:
 
 def map_path(hermes_home: Path) -> Path:
     return state_dir(hermes_home) / "discord.map.json"
+
+
+def load_map(hermes_home: Path) -> dict | None:
+    """Read the channel map, or None if absent. Clean error on corrupt JSON."""
+    mp = map_path(hermes_home)
+    if not mp.is_file():
+        return None
+    try:
+        return json.loads(mp.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        raise SystemExit(f"ERROR: corrupt channel map at {mp} — re-run `companyctl bootstrap`.")
 
 
 def read_env_value(env_path: Path, key: str) -> str | None:
@@ -232,7 +246,9 @@ def validate(config: dict, repo_root: Path) -> list[str]:
                 err(f"{where}.access", "required non-empty array")
             else:
                 for a in access:
-                    if a not in allowed_access:
+                    if not isinstance(a, str):
+                        err(f"{where}.access", "entries must be strings")
+                    elif a not in allowed_access:
                         err(
                             f"{where}.access",
                             f"'{a}' is not 'board', 'exec', or a role id",
@@ -532,11 +548,30 @@ def count_top_level_key(config_yaml_text: str, key: str) -> int:
     return sum(1 for line in config_yaml_text.splitlines() if line.startswith(prefix))
 
 
+def top_level_yaml_keys(text: str) -> set[str]:
+    """Top-level (column-0) mapping keys in a YAML text. Comments ignored."""
+    keys = set()
+    for line in text.splitlines():
+        if line and not line[0].isspace() and not line.lstrip().startswith("#"):
+            m = re.match(r"([A-Za-z_][\w-]*):", line)
+            if m:
+                keys.add(m.group(1))
+    return keys
+
+
+def template_config_keys() -> set[str]:
+    template = REPO_ROOT / "templates" / "config.yaml"
+    if not template.is_file():
+        return set()
+    return top_level_yaml_keys(template.read_text(encoding="utf-8"))
+
+
 def doctor_offline(config: dict, hermes_home: Path) -> list[tuple[str, str]]:
     """Return (level, message) rows. level in {PASS, WARN, FAIL}."""
     rows: list[tuple[str, str]] = []
     profiles_dir = hermes_home / "profiles"
     token_owners: dict[str, list[str]] = {}
+    tmpl_keys = template_config_keys()
 
     for role in config["roles"]:
         profile = role["hermesProfile"]
@@ -550,9 +585,14 @@ def doctor_offline(config: dict, hermes_home: Path) -> list[tuple[str, str]]:
 
         cfg_file = pdir / "config.yaml"
         if cfg_file.is_file():
-            dupes = count_top_level_key(cfg_file.read_text(encoding="utf-8"), "discord")
-            if dupes > 1:
+            cfg_text = cfg_file.read_text(encoding="utf-8")
+            if count_top_level_key(cfg_text, "discord") > 1:
                 rows.append(("FAIL", f"{profile}: duplicate top-level `discord:` key in config.yaml"))
+            if re.search(r"(?m)^\s*require_mention:\s*false\b", cfg_text):
+                rows.append(("FAIL", f"{profile}: require_mention is false (shared channels answer without @mention)"))
+            missing = tmpl_keys - top_level_yaml_keys(cfg_text)
+            if missing:
+                rows.append(("WARN", f"{profile}: config.yaml missing template key(s): {', '.join(sorted(missing))}"))
 
         token = read_env_value(pdir / ".env", "DISCORD_BOT_TOKEN")
         if not token:
@@ -562,9 +602,10 @@ def doctor_offline(config: dict, hermes_home: Path) -> list[tuple[str, str]]:
             token_owners.setdefault(digest, []).append(profile)
 
     for owners in token_owners.values():
-        if len(owners) > 1:
+        distinct = sorted(set(owners))
+        if len(distinct) > 1:
             rows.append(
-                ("FAIL", f"shared DISCORD_BOT_TOKEN across profiles: {', '.join(sorted(owners))}")
+                ("FAIL", f"shared DISCORD_BOT_TOKEN across profiles: {', '.join(distinct)}")
             )
 
     for role in config["roles"]:
@@ -580,6 +621,9 @@ def doctor_offline(config: dict, hermes_home: Path) -> list[tuple[str, str]]:
 def doctor_online(config: dict, hermes_home: Path) -> list[tuple[str, str]]:
     rows: list[tuple[str, str]] = []
     profiles_dir = hermes_home / "profiles"
+    data = load_map(hermes_home) or {}
+    guild_id = data.get("guildId")
+
     for role in config["roles"]:
         profile = role["hermesProfile"]
         token = read_env_value(profiles_dir / profile / ".env", "DISCORD_BOT_TOKEN")
@@ -588,22 +632,23 @@ def doctor_online(config: dict, hermes_home: Path) -> list[tuple[str, str]]:
         try:
             me = discord_request("GET", "/users/@me", token)
             rows.append(("PASS", f"{profile}: token valid (bot {me.get('username')})"))
+            if guild_id:
+                guilds = discord_request("GET", "/users/@me/guilds", token) or []
+                if not any(str(g.get("id")) == str(guild_id) for g in guilds):
+                    rows.append(("FAIL", f"{profile}: bot has not joined guild {guild_id}"))
         except DiscordError as exc:
             rows.append(("FAIL", f"{profile}: token check failed — {exc}"))
 
-    mp = map_path(hermes_home)
-    if mp.is_file():
-        setup_token = os.environ.get("DISCORD_SETUP_TOKEN")
-        data = json.loads(mp.read_text(encoding="utf-8"))
-        if setup_token and data.get("guildId"):
-            try:
-                live = discord_request("GET", f"/guilds/{data['guildId']}/channels", setup_token)
-                live_names = {c["name"] for c in live}
-                for name in data.get("channels", {}):
-                    if name not in live_names:
-                        rows.append(("FAIL", f"channel #{name} in map but not in guild (drift)"))
-            except DiscordError as exc:
-                rows.append(("WARN", f"channel drift check skipped — {exc}"))
+    setup_token = os.environ.get("DISCORD_SETUP_TOKEN")
+    if setup_token and guild_id:
+        try:
+            live = discord_request("GET", f"/guilds/{guild_id}/channels", setup_token)
+            live_names = {c["name"] for c in live}
+            for name in data.get("channels", {}):
+                if name not in live_names:
+                    rows.append(("FAIL", f"channel #{name} in map but not in guild (drift)"))
+        except DiscordError as exc:
+            rows.append(("WARN", f"channel drift check skipped — {exc}"))
     return rows
 
 
@@ -652,11 +697,10 @@ def cmd_standup(args: argparse.Namespace) -> int:
         print(body)
         return 0
 
-    mp = map_path(hermes_home)
-    if not mp.is_file():
-        print(f"ERROR: no channel map at {mp} — run `companyctl bootstrap` first.", file=sys.stderr)
+    data = load_map(hermes_home)
+    if data is None:
+        print("ERROR: no channel map — run `companyctl bootstrap` first.", file=sys.stderr)
         return 2
-    data = json.loads(mp.read_text(encoding="utf-8"))
     channel_id = data.get("channels", {}).get("standup")
     if not channel_id:
         print("ERROR: #standup not found in channel map.", file=sys.stderr)
@@ -785,7 +829,10 @@ def parse_decision_block(text: str, role_map: dict) -> dict:
 
 def read_text_input(args: argparse.Namespace) -> str:
     if getattr(args, "file", None):
-        return Path(args.file).read_text(encoding="utf-8")
+        try:
+            return Path(args.file).read_text(encoding="utf-8")
+        except (FileNotFoundError, PermissionError, IsADirectoryError, UnicodeDecodeError) as exc:
+            raise SystemExit(f"ERROR: cannot read {args.file}: {exc}")
     return sys.stdin.read()
 
 
@@ -857,9 +904,12 @@ def cmd_decision(args: argparse.Namespace) -> int:
 # --------------------------------------------------------------------------- #
 SENSITIVE_RULES = [
     ("discord-token", re.compile(r"\b[A-Za-z0-9_-]{24,28}\.[A-Za-z0-9_-]{6}\.[A-Za-z0-9_-]{27,}\b"), "FAIL"),
+    ("private-key", re.compile(r"-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP )?PRIVATE KEY-----"), "FAIL"),
+    ("jwt", re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}"), "FAIL"),
+    ("slack-webhook", re.compile(r"hooks\.slack\.com/services/[A-Za-z0-9/]+"), "FAIL"),
     ("api-key",
-     re.compile(r"\b(sk-[A-Za-z0-9]{16,}|xox[baprs]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16}|"
-                r"ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{20,}|AIza[0-9A-Za-z_-]{35})\b"), "FAIL"),
+     re.compile(r"(sk-[A-Za-z0-9_-]{16,}|xox[baprs]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16}|"
+                r"ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{20,}|AIza[0-9A-Za-z_-]{35})"), "FAIL"),
     ("email", re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b"), "FAIL"),
     ("snowflake-id", re.compile(r"\b\d{17,20}\b"), "WARN"),
 ]
@@ -1025,11 +1075,11 @@ def cmd_archive(args: argparse.Namespace) -> int:
     print(f"Saved minutes: {out_file} ({len(messages)} messages)")
 
     if args.post_briefs:
-        mp = map_path(hermes_home)
-        if not mp.is_file():
+        data = load_map(hermes_home)
+        if not data:
             print("WARN: no channel map — skipping --post-briefs.", file=sys.stderr)
             return 0
-        channel_id = json.loads(mp.read_text(encoding="utf-8")).get("channels", {}).get("briefs")
+        channel_id = data.get("channels", {}).get("briefs")
         if not channel_id:
             print("WARN: #briefs not in channel map — skipping post.", file=sys.stderr)
             return 0
@@ -1071,9 +1121,8 @@ def cmd_status(args: argparse.Namespace) -> int:
     print(f"profiles   : {len(scaffolded)}/{len(config['roles'])} scaffolded "
           f"({', '.join(scaffolded) or 'none'})")
 
-    mp = map_path(hermes_home)
-    if mp.is_file():
-        data = json.loads(mp.read_text(encoding="utf-8"))
+    data = load_map(hermes_home)
+    if data:
         print(f"discord map: guild {data.get('guildId', '?')}, "
               f"{len(data.get('channels', {}))} channels")
     else:
@@ -1173,7 +1222,18 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _force_utf8_output() -> None:
+    """Korean output must not crash on a non-UTF-8 console (e.g. Windows cp1252
+    when stdout is redirected/piped)."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8")
+        except (AttributeError, ValueError):
+            pass
+
+
 def main(argv: list[str] | None = None) -> int:
+    _force_utf8_output()
     parser = build_parser()
     args = parser.parse_args(argv)
     return args.func(args)

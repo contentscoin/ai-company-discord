@@ -1,5 +1,6 @@
 """Unit tests for companyctl pure logic (no network). Run: python3 -m unittest discover -s tests"""
 
+import argparse
 import importlib.util
 import json
 import tempfile
@@ -267,6 +268,86 @@ class DoctorModelHintTests(unittest.TestCase):
 
     def test_shipped_template_roles_all_have_modelhint(self):
         self.assertTrue(all(r.get("modelHint") for r in TEMPLATE["roles"]))
+
+
+# --- Regression tests for review-confirmed fixes ------------------------- #
+class ValidateRobustnessTests(unittest.TestCase):
+    def test_non_string_access_element_does_not_crash(self):
+        for bad in ([{"role": "board"}], [["board"]]):
+            cfg = json.loads(json.dumps(TEMPLATE))
+            cfg["discord"]["channels"][0]["access"] = bad
+            errors = companyctl.validate(cfg, REPO_ROOT)  # must not raise TypeError
+            self.assertTrue(any("entries must be strings" in e for e in errors))
+
+
+class SensitiveScanExtraTests(unittest.TestCase):
+    def _kinds(self, text):
+        return {k for _, _, k in companyctl.scan_for_sensitive(text)}
+
+    def test_openai_project_key_detected(self):
+        self.assertIn("api-key", self._kinds("sk-proj-" + "T3Blbk" + "a" * 30))
+
+    def test_pem_private_key_detected(self):
+        self.assertIn("private-key", self._kinds("-----BEGIN OPENSSH PRIVATE KEY-----"))
+
+    def test_jwt_detected(self):
+        self.assertIn("jwt", self._kinds("eyJ" + "a" * 12 + ".eyJ" + "b" * 20 + "." + "c" * 30))
+
+    def test_slack_webhook_detected(self):
+        self.assertIn("slack-webhook", self._kinds("https://hooks.slack.com/services/T0/B0/xyz"))
+
+
+class DoctorRegressionTests(unittest.TestCase):
+    def _profile(self, base, name, token, require_mention="true"):
+        d = base / "profiles" / name
+        d.mkdir(parents=True)
+        (d / "SOUL.md").write_text("s")
+        (d / ".env").write_text(f"DISCORD_BOT_TOKEN={token}\n")
+        (d / "config.yaml").write_text(
+            f"discord:\n  require_mention: {require_mention}\nplatform_toolsets:\n  discord: [x]\n"
+        )
+
+    def test_same_profile_mapped_twice_no_false_shared_fail(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            self._profile(home, "ceo", "A")
+            cfg = {"roles": [
+                {"id": "ceo", "hermesProfile": "ceo", "modelHint": "x"},
+                {"id": "chair", "hermesProfile": "ceo", "modelHint": "x"},
+            ]}
+            rows = companyctl.doctor_offline(cfg, home)
+            self.assertFalse(any("shared DISCORD_BOT_TOKEN" in m for _, m in rows))
+
+    def test_require_mention_false_is_fail(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            self._profile(home, "ceo", "A", require_mention="false")
+            cfg = {"roles": [{"id": "ceo", "hermesProfile": "ceo", "modelHint": "x"}]}
+            rows = companyctl.doctor_offline(cfg, home)
+            self.assertTrue(any(l == "FAIL" and "require_mention is false" in m for l, m in rows))
+
+
+class MapAndInputTests(unittest.TestCase):
+    def test_corrupt_map_raises_clean_systemexit(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            (home / "ai-company").mkdir(parents=True)
+            (home / "ai-company" / "discord.map.json").write_text("{bad json")
+            with self.assertRaises(SystemExit):
+                companyctl.load_map(home)
+
+    def test_missing_map_returns_none(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertIsNone(companyctl.load_map(Path(tmp)))
+
+    def test_read_text_input_missing_file_raises_systemexit(self):
+        ns = argparse.Namespace(file="/definitely/not/here.txt")
+        with self.assertRaises(SystemExit):
+            companyctl.read_text_input(ns)
 
 
 if __name__ == "__main__":

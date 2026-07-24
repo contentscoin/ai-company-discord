@@ -182,7 +182,13 @@ flowchart LR
 
 19. `companyctl archive --thread <id> [--post-briefs]` — 회의 스레드 → 새니타이즈 린트 통과한 회의록만 `~/.hermes/ai-company/minutes/`에 저장. 토큰 포함 스레드는 저장·게시 거부
 20. `companyctl status` — 프로필·채널 map·결정 로그·마지막 standup 한 화면 요약
-21. 비용 가시성 — role별 `modelHint` 필드 + doctor WARN + `COSTS.md`(Paperclip 미사용자용). 자체 추적 로직 없음. 테스트 총 26건
+21. 비용 가시성 — role별 `modelHint` 필드 + doctor WARN + `COSTS.md`(Paperclip 미사용자용). 자체 추적 로직 없음
+
+**적대적 리뷰 반영 (11건 CONFIRMED 수정)**
+
+22. 보안 — 새니타이즈 린트에 PEM 개인키·JWT·Slack 웹훅 규칙 추가, OpenAI `sk-proj-` 키 형식 검출 수정
+23. 견고성 — validate가 비문자열 `access` 원소에 크래시하지 않음, `--file` 부재·손상된 map JSON은 깔끔한 에러, 비-UTF-8 stdout(Windows)에서 한글 출력 크래시 방지, PowerShell 래퍼가 `py -3` 우선·Store 스텁 회피
+24. doctor 강화 — `require_mention: false` FAIL 검출(DoD 충족), config.yaml↔템플릿 키 드리프트, `--online` 길드 가입 확인, 한 프로필이 두 role에 매핑될 때 토큰 오탐 제거. 테스트 총 36건
 
 ## 7. 비목표 (Non-goals)
 
