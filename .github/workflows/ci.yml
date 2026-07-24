@@ -18,6 +18,9 @@ jobs:
       - name: Validate company.discord.json (SSoT)
         run: python3 scripts/companyctl.py validate
 
+      - name: Unit tests
+        run: python3 -m unittest discover -s tests -v
+
       - name: Check Markdown links
         run: python3 scripts/check_links.py
 

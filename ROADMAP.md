@@ -98,9 +98,11 @@ flowchart LR
 의존성: 없음 (시작점).
 **DoD**: `validate`가 배포 템플릿에서 exit 0, 필드 훼손 픽스처에서 exit≠0 + 위치 지목 · JSON에 프로필을 추가하면 **스크립트 수정 없이** 스캐폴드 확장 · CI green.
 
-### Phase 2 — 자동화: 부트스트랩 + doctor + cron 템플릿 (총 L)
+### Phase 2 — 자동화: 부트스트랩 + doctor + cron 템플릿 (총 L) — ✅ 구현됨
 
 목표: JSON → 라이브 Discord 서버 상태를 스크립트가 만들고 검증. 수동 채널 생성 종료.
+
+> 구현되어 이 PR에 포함. 순수 로직(계획 계산·doctor 오프라인 검사·standup 렌더)은 `tests/`로 검증. 라이브 Discord 길드 대상 실행은 토큰이 필요해 사용자 환경에서 수행합니다 (bootstrap 기본 dry-run).
 
 | # | 산출물 | 파일 | 노력 |
 |---|--------|------|------|
@@ -155,8 +157,15 @@ flowchart LR
 6. `templates/company.schema.json` — 편집기용 JSON Schema 계약
 7. `scripts/companyctl.py` — 단일 CLI. `validate`(스키마 + 파일시스템 교차 검증), `scaffold`(JSON 기반, 멱등). 후속 Phase의 서브커맨드가 여기 붙습니다
 8. `scripts/scaffold-profiles.sh` → `companyctl.py scaffold` 호환 래퍼로 축소 + `scripts/companyctl.ps1`(Windows). scaffold의 CEO config 중복 `discord:` 키 함정 제거
-9. `scripts/check_links.py` + `.github/workflows/ci.yml` — CI가 validate·링크·shellcheck로 SSoT 보호
+9. `scripts/check_links.py` + `.github/workflows/ci.yml` — CI가 validate·테스트·링크·shellcheck로 SSoT 보호
 10. `WINDOWS.md` 재작성(운영 관점) + publish 스크립트 deprecated 표기
+
+**Phase 2 구현 (자동화)**
+
+11. `companyctl bootstrap` — JSON → Discord REST로 역할/카테고리/채널/권한 생성. 멱등(이름 매칭·삭제 금지), 기본 dry-run·`--apply` 필수, 토큰은 `DISCORD_SETUP_TOKEN` env로만, 채널 map은 `~/.hermes/ai-company/discord.map.json`
+12. `companyctl doctor` — 프로필 파일·토큰 중복(SHA-256, 값 미출력)·중복 `discord:` 키·config 드리프트 검사. `--online`은 토큰 유효성·채널 드리프트. Intent는 WARN 명시
+13. `companyctl standup post [--dry-run]` + `templates/cron/crontab.example` — Hermes 내장 cron이 1급 경로, 이건 fallback. MEETINGS.md에 스케줄링 절
+14. `tests/test_companyctl.py` — 순수 로직 12개 유닛테스트 (계획 멱등성·토큰 중복·렌더). SETUP.md를 bootstrap/doctor 흐름으로 갱신
 
 ## 7. 비목표 (Non-goals)
 

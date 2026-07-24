@@ -13,7 +13,7 @@
 ## 1. Discord 서버
 
 1. Discord에서 서버 생성: 이름 예) `AI Company`
-2. [CHANNELS.md](./CHANNELS.md) 카테고리·채널을 그대로 생성
+2. 카테고리·채널은 손으로 만들지 말고 **`companyctl bootstrap`으로 생성**합니다 (아래 §5.5). 설계 근거는 [CHANNELS.md](./CHANNELS.md) 참고
 3. 본인 계정에 `Board` 역할 부여
 
 ## 2. 봇 5개 생성 (1 프로필 = 1 봇)
@@ -99,6 +99,31 @@ platform_toolsets:
 ```
 
 공유 채널에서는 **멘션 필수**. DM에서는 멘션 없이 1:1.
+
+## 5.5 채널 부트스트랩 + 헬스체크
+
+카테고리·채널·역할은 `company.discord.json`(단일 진실원천)에서 자동 생성합니다. 손으로 만들 필요 없음.
+
+```bash
+export DISCORD_SETUP_TOKEN=...        # 셋업용 봇 토큰 (인자로 넘기지 않음)
+python3 scripts/companyctl.py bootstrap --guild <서버ID>            # dry-run: 무엇을 만들지 출력
+python3 scripts/companyctl.py bootstrap --guild <서버ID> --apply    # 실제 생성
+```
+
+- **멱등** — 이름으로 매칭, 이미 있으면 건너뜀, **삭제는 절대 안 함**. 재실행하면 "0 changes"
+- 생성된 채널 ID는 `~/.hermes/ai-company/discord.map.json`에 기록 (레포 밖)
+- `bootstrap`은 서버 역할(Board/Exec/Observer)·카테고리·채널과 카테고리 단위 권한을 만듭니다. 특정 봇만 보는 좁은 채널(예: `#dev`)은 봇 합류 후 멤버 단위로 좁히라는 안내를 함께 출력합니다
+
+> `bootstrap`은 Manage Channels/Roles 권한이 필요합니다. 셋업용 봇에 임시로 부여했다가 완료 후 회수하세요. 토큰은 `DISCORD_SETUP_TOKEN` 환경변수로만 전달합니다.
+
+설정 상태 점검:
+
+```bash
+python3 scripts/companyctl.py doctor            # 오프라인: 프로필 파일·토큰 중복·config 드리프트
+python3 scripts/companyctl.py doctor --online   # + 토큰 유효성·채널 드리프트 (네트워크)
+```
+
+`doctor`는 토큰 값을 절대 출력하지 않고 SHA-256 해시로만 중복을 검사합니다. Windows는 `.\scripts\companyctl.ps1 doctor`.
 
 ## 6. 스모크 테스트
 
