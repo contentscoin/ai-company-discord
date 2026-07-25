@@ -1,7 +1,7 @@
 {
   "$schema": "./company.schema.json",
   "name": "solo-founder-discord",
-  "version": "0.2.0",
+  "version": "0.5.0",
   "protocolVersion": "1",
   "meetingChannel": "discord",
   "hotlineChannel": "telegram-dm-optional",

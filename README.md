@@ -53,12 +53,20 @@ flowchart LR
 ```bash
 git clone https://github.com/contentscoin/ai-company-discord.git
 cd ai-company-discord
-./scripts/scaffold-profiles.sh
+python3 scripts/companyctl.py validate   # check the company definition
+./scripts/scaffold-profiles.sh           # = companyctl scaffold
 ```
 
 1. Create **five** Discord applications (one bot per soul) — see [SETUP.md](./SETUP.md)
 2. Put each `DISCORD_BOT_TOKEN` in `~/.hermes/profiles/<name>/.env`
-3. Create channels from [CHANNELS.md](./CHANNELS.md)
+3. Create roles/categories/channels from the company definition (dry-run first):
+
+```bash
+export DISCORD_SETUP_TOKEN=...   # setup bot token, env only
+python3 scripts/companyctl.py bootstrap --guild <server-id>           # preview
+python3 scripts/companyctl.py bootstrap --guild <server-id> --apply   # create
+```
+
 4. Start gateways:
 
 ```bash
@@ -69,7 +77,32 @@ hermes -p growth gateway start
 hermes -p critic gateway start
 ```
 
-5. Smoke-test in `#exec-meeting`: `@CEO @CTO 주간회의 테스트`
+5. Health-check, then smoke-test in `#exec-meeting`: `@CEO @CTO 주간회의 테스트`
+
+```bash
+python3 scripts/companyctl.py doctor
+```
+
+> Windows: use `.\scripts\companyctl.ps1 <subcommand>` — see [WINDOWS.md](./WINDOWS.md).
+
+## companyctl
+
+One dependency-free CLI (Python 3 stdlib) driven by `templates/company.discord.json`, the single source of truth.
+
+| Command | What it does |
+|---------|--------------|
+| `validate` | Check the company definition against the schema + filesystem |
+| `scaffold` | Create `~/.hermes/profiles/<name>/` from the roles in the JSON |
+| `bootstrap` | Create Discord roles/categories/channels (idempotent, dry-run by default, never deletes) |
+| `doctor` | Health-check profiles, tokens, and config drift (`--online` adds live checks) |
+| `standup post` | Post/preview the daily standup (Hermes' own cron is the preferred path) |
+| `decision` | Parse a meeting close block → normalized JSON / Paperclip issues |
+| `lint` | Scan text for secrets/PII before OpenCrab ingest |
+| `digest` | Render a weekly brief from the decision log |
+| `archive` | Export a meeting thread to sanitized local minutes |
+| `status` | One-screen summary of profiles, channel map, and decisions |
+
+Secrets are read only from the environment or `.env` and are never printed. Runtime state lives under `~/.hermes/ai-company/`, never in this repo.
 
 ## Docs
 
