@@ -506,6 +506,60 @@ class NetworkTimeoutTests(unittest.TestCase):
             self.assertIn("timed out", str(cm.exception))
 
 
+class VerifyRuntimeTests(unittest.TestCase):
+    """The probe that settles whether `up`'s pid tracking is even valid."""
+
+    BLOCKING = {"ran": True, "verdict": "blocking-process", "pid": 1, "survivedSeconds": 8,
+                "pidTrackingValid": True}
+    SERVICE = {"ran": True, "verdict": "service-control", "pid": 1, "exitedAfterSeconds": 0.01,
+               "exitCode": 0, "output": "asked launchd", "pidTrackingValid": False}
+
+    def _findings(self, start):
+        return {"date": "2026-07-25", "platform": "linux", "hermesBin": "hermes",
+                "profile": "ceo",
+                "gatewaySubcommands": {"available": True, "exitCode": 0,
+                                       "subcommands": ["setup", "start"],
+                                       "hasInstall": False, "helpText": "..."},
+                "gatewayStart": start,
+                "serviceUnits": {"launchd": [], "systemd": []},
+                "docker": {"available": False, "reason": "docker not on PATH"}}
+
+    def test_blocking_verdict_endorses_the_current_design(self):
+        out = companyctl.render_runtime_contract(self._findings(self.BLOCKING))
+        self.assertIn("BLOCKING PROCESS", out)
+        self.assertIn("correct as written", out)
+        self.assertNotIn("must be rewritten", out)
+
+    def test_service_control_verdict_flags_the_design_as_wrong(self):
+        out = companyctl.render_runtime_contract(self._findings(self.SERVICE))
+        self.assertIn("SERVICE-CONTROL VERB", out)
+        self.assertIn("must be rewritten", out)
+        self.assertIn("control client", out)
+
+    def test_service_control_without_units_does_not_claim_foreground(self):
+        out = companyctl.render_runtime_contract(self._findings(self.SERVICE))
+        self.assertNotIn("consistent with a foreground process", out)
+
+    def test_undetermined_when_hermes_absent(self):
+        f = self._findings({"ran": False, "reason": "'hermes' not on PATH"})
+        f["gatewaySubcommands"] = {"available": False, "reason": "'hermes' not on PATH"}
+        out = companyctl.render_runtime_contract(f)
+        self.assertIn("NOT DETERMINED", out)
+
+    def test_contract_always_keeps_the_manual_identity_check(self):
+        """Green containers are not evidence of distinct profiles."""
+        out = companyctl.render_runtime_contract(self._findings(self.BLOCKING))
+        self.assertIn("doctor --online", out)
+        self.assertIn("Green containers are not evidence", out)
+
+    def test_probe_reports_cleanly_when_binary_missing(self):
+        from unittest import mock
+        with mock.patch.object(companyctl.shutil, "which", return_value=None):
+            self.assertFalse(companyctl.probe_gateway_subcommands()["available"])
+            self.assertFalse(
+                companyctl.probe_gateway_start_semantics("ceo", Path("/tmp"))["ran"])
+
+
 class MapAndInputTests(unittest.TestCase):
     def test_corrupt_map_raises_clean_systemexit(self):
         import tempfile

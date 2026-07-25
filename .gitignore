@@ -16,4 +16,8 @@ secrets/*.env
 __pycache__/
 *.pyc
 
+# Machine-specific probe output from `companyctl verify-runtime`.
+# Commit it deliberately once the contract is settled for your pinned ref.
+RUNTIME-CONTRACT.md
+
 *.log
