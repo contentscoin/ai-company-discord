@@ -416,14 +416,25 @@ class LifecycleTests(unittest.TestCase):
             companyctl.save_gateways(home, {"ceo": {"pid": 42}})
             self.assertEqual(companyctl.load_gateways(home)["ceo"]["pid"], 42)
 
-    def test_service_units_reference_the_profile_and_home(self):
-        unit = companyctl.SYSTEMD_UNIT.format(profile="ceo", home="/h", bin="/usr/bin/hermes")
-        self.assertIn("-p ceo gateway start", unit)
-        self.assertIn("HERMES_HOME=/h", unit)
-        self.assertIn("Restart=always", unit)
-        plist = companyctl.LAUNCHD_PLIST.format(profile="cto", home="/h", bin="/usr/bin/hermes")
-        self.assertIn("<string>cto</string>", plist)
-        self.assertIn("KeepAlive", plist)
+    def test_gateways_are_started_with_run_not_start(self):
+        """`gateway start` drives an already-installed service and returns; only
+        `gateway run` is the foreground process whose pid we can track.
+        Verified against hermes-agent 0.19.0."""
+        from unittest import mock
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.object(companyctl.subprocess, "Popen") as popen:
+                popen.return_value.pid = 4242
+                companyctl.start_gateway(Path(tmp), "ceo")
+            argv = popen.call_args[0][0]
+            self.assertEqual(argv[-3:], ["ceo", "gateway", "run"])
+            self.assertNotIn("start", argv)
+
+    def test_service_delegates_to_hermes_gateway_install(self):
+        """Upstream writes the systemd/launchd unit itself; emitting our own
+        would compete with it."""
+        self.assertFalse(hasattr(companyctl, "SYSTEMD_UNIT"))
+        self.assertFalse(hasattr(companyctl, "LAUNCHD_PLIST"))
 
 
 class JsonApiTests(unittest.TestCase):
