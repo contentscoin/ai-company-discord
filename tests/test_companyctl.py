@@ -464,26 +464,75 @@ class JsonApiTests(unittest.TestCase):
             self.assertIn("1/1 scaffolded", out)
             self.assertIn("run `companyctl bootstrap`", out)
 
-    def test_paperclip_issues_are_built_from_actions(self):
+    def test_paperclip_issues_match_the_measured_create_schema(self):
+        """Fields must be the ones POST /api/companies/:id/issues accepts
+        (PAPERCLIP.md) — body/owner/due are not create fields."""
         entry = {"actions": [
             {"owner": "cto", "task": "fix the thing", "due": "2026-08-01"},
             {"owner": "growth", "task": "", "due": None},  # no task -> skipped
         ]}
         issues = companyctl.build_paperclip_issues(entry)
         self.assertEqual(len(issues), 1)
-        self.assertEqual(issues[0]["owner"], "cto")
-        self.assertEqual(issues[0]["due"], "2026-08-01")
+        self.assertEqual(issues[0]["title"], "fix the thing")
+        self.assertEqual(issues[0]["priority"], "medium")
+        self.assertIn("OWNER: cto", issues[0]["description"])
+        self.assertIn("DUE: 2026-08-01", issues[0]["description"])
+        for gone in ("body", "owner", "due"):
+            self.assertNotIn(gone, issues[0])
+
+    def test_paperclip_owner_maps_to_assignee_agent_id(self):
+        entry = {"actions": [{"owner": "cto", "task": "ship it", "due": None},
+                             {"owner": "loop", "task": "verify it", "due": None}]}
+        agent_map = {"cto": "3f1c0d3e-0000-4000-8000-000000000001"}
+        issues = companyctl.build_paperclip_issues(entry, agent_map)
+        self.assertEqual(issues[0]["assigneeAgentId"], agent_map["cto"])
+        self.assertNotIn("assigneeAgentId", issues[1])  # unmapped role -> omitted
+
+    def test_build_agent_map_reads_roles(self):
+        cfg = {"roles": [{"id": "cto", "paperclipAgentId": "u-u-i-d"},
+                         {"id": "ceo"}]}
+        self.assertEqual(companyctl.build_agent_map(cfg), {"cto": "u-u-i-d"})
+
+    def test_paperclip_url_targets_the_company_scoped_route(self):
+        entry = {"actions": [{"owner": "cto", "task": "ship it", "due": None}]}
+        # port 1 is reliably closed — the URL is still computed before connect
+        result = companyctl.emit_paperclip(entry, "http://127.0.0.1:1/", "comp-1")
+        self.assertEqual(result["status"], "unreachable")
 
     def test_paperclip_unreachable_returns_payload_not_prints(self):
-        entry = {"actions": [{"owner": "cto", "task": "ship it"}]}
+        entry = {"actions": [{"owner": "cto", "task": "ship it", "due": None}]}
         # port 1 is reliably closed
-        result = companyctl.emit_paperclip(entry, "http://127.0.0.1:1")
+        result = companyctl.emit_paperclip(entry, "http://127.0.0.1:1", "comp-1")
         self.assertEqual(result["status"], "unreachable")
+        self.assertEqual(len(result["issues"]), 1)  # nothing created -> all payloads remain
+        self.assertIn("payloads instead", companyctl.render_paperclip_result(result))
+
+    def test_paperclip_without_company_id_degrades_not_posts(self):
+        entry = {"actions": [{"owner": "cto", "task": "ship it", "due": None}]}
+        result = companyctl.emit_paperclip(entry, "http://127.0.0.1:1", None)
+        self.assertEqual(result["status"], "no-company")
         self.assertEqual(len(result["issues"]), 1)
-        self.assertIn("emitting issue payloads", companyctl.render_paperclip_result(result))
+        rendered = companyctl.render_paperclip_result(result)
+        self.assertIn("PAPERCLIP_COMPANY_ID", rendered)
+        self.assertIn("emitting issue payloads", rendered)
+
+    def test_paperclip_http_error_reports_code_and_payload(self):
+        rendered = companyctl.render_paperclip_result(
+            {"status": "http-error", "code": 401, "url": "http://x/api/companies/c/issues",
+             "issues": [{"title": "t"}]})
+        self.assertIn("401", rendered)
+        self.assertIn("PAPERCLIP_API_KEY", rendered)
+
+    def test_paperclip_key_is_env_only_and_sent_as_bearer(self):
+        from unittest import mock
+        with mock.patch.dict(companyctl.os.environ, {"PAPERCLIP_API_KEY": "k-123"}):
+            self.assertEqual(companyctl.paperclip_headers(),
+                             {"Authorization": "Bearer k-123"})
+        with mock.patch.dict(companyctl.os.environ, {}, clear=True):
+            self.assertEqual(companyctl.paperclip_headers(), {})
 
     def test_paperclip_no_actions(self):
-        result = companyctl.emit_paperclip({"actions": []}, "http://127.0.0.1:1")
+        result = companyctl.emit_paperclip({"actions": []}, "http://127.0.0.1:1", "comp-1")
         self.assertEqual(result["status"], "no-actions")
 
 
