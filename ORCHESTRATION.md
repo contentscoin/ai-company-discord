@@ -103,3 +103,4 @@ launchctl load ~/Library/LaunchAgents/sh.aicompany.hermes.ceo.plist
 - ✅ 확인됨: 네이티브 `up`/`down`/`restart`/`logs`/`service` 전 경로 (스텁 게이트웨이로 기동·중복 방지·강제 종료 감지·선택 재기동까지)
 - ⚠️ **미확인: 컨테이너가 프로필을 선택하는 방식.** 업스트림 이미지가 `HERMES_PROFILE` 환경변수를 읽는지 확인하지 못했습니다. 첫 `docker compose up` 때 게이트웨이가 엉뚱한(또는 기본) 프로필로 뜨면, 업스트림 이미지의 실제 진입점 규약에 맞게 각 서비스의 `environment`/`command`를 한 줄 조정해야 합니다
 - ⚠️ 미확인: Paperclip을 `npx`로 컨테이너에서 띄우는 경로(내장 Postgres 초기화 포함)
+- ⚠️ **미확인이자 이 설계의 최대 전제: `hermes -p <profile> gateway start`가 포그라운드 프로세스인가.** 네이티브 경로는 이 명령이 블로킹 프로세스라고 가정하고 PID를 추적합니다. 만약 업스트림에서 이것이 **서비스 제어 명령**(launchd/systemd/schtasks에 등록된 유닛을 기동시키고 즉시 반환)이라면, 기록된 PID는 게이트웨이가 아니라 제어 클라이언트이므로 `status`는 곧바로 DOWN을 보고하고 `up`은 중복 기동을 시도합니다. Hermes 문서 사이트(403)와 raw 문서 경로(404) 모두 접근하지 못해 `gateway install` 서브커맨드의 존재를 확인도 반증도 하지 못했습니다. **실제 Hermes 설치본에서 `hermes gateway --help`를 한 번 실행하면 즉시 판별됩니다** — 그 결과에 따라 네이티브 경로는 PID 추적 대신 업스트림 서비스 유닛에 위임하는 쪽으로 바뀌어야 합니다 ([DESKTOP.md](./DESKTOP.md) Phase 0.2)

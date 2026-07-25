@@ -6,8 +6,15 @@ on:
   pull_request:
 
 jobs:
-  checks:
-    runs-on: ubuntu-latest
+  # Portability is not uniform: the config/protocol commands must work on all
+  # three platforms, the gateway lifecycle is POSIX-only by design. Running the
+  # suite on Windows is what keeps that distinction honest instead of a claim.
+  tests:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
@@ -20,6 +27,15 @@ jobs:
 
       - name: Unit tests
         run: python3 -m unittest discover -s tests -v
+
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
 
       - name: Check Markdown links
         run: python3 scripts/check_links.py

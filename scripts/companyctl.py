@@ -2,7 +2,13 @@
 """companyctl — single source-of-truth CLI for ai-company-discord.
 
 Consumes templates/company.discord.json. Python 3 standard library only
-(no `pip install`), so it runs the same on Linux, macOS, and Windows.
+(no `pip install`).
+
+Portability is NOT uniform, despite being stdlib-only. The config and protocol
+commands (validate/scaffold/bootstrap/doctor/standup/decision/lint/digest/
+archive/status) run on Linux, macOS, and Windows. The gateway lifecycle
+(up/down/restart/logs/service) is POSIX-only and refuses to run on Windows,
+where the Docker path supervises instead — see require_posix_lifecycle().
 
 Subcommands:
   validate    check company.discord.json against the schema + filesystem
@@ -1148,6 +1154,10 @@ def cmd_status(args: argparse.Namespace) -> int:
     marker = state_dir(hermes_home) / "last_standup.txt"
     print(f"last standup: {marker.read_text(encoding='utf-8').strip() if marker.is_file() else 'never'}")
 
+    if IS_WINDOWS:
+        print("gateways   : native lifecycle is POSIX-only — use `docker compose ps`")
+        return 0
+
     gws = load_gateways(hermes_home)
     if gws:
         alive = [p for p, r in gws.items() if pid_alive(r.get("pid", -1))]
@@ -1168,6 +1178,28 @@ def cmd_status(args: argparse.Namespace) -> int:
 # For real auto-restart, `service` emits systemd/launchd units; the Docker path
 # gets it from `restart: unless-stopped`.
 # --------------------------------------------------------------------------- #
+IS_WINDOWS = os.name == "nt"
+
+# Why the native lifecycle is POSIX-only, deliberately:
+#   os.kill(pid, 0) — the liveness probe — is documented on Windows as
+#   "unconditionally killed by the TerminateProcess API", so a status refresh
+#   would kill the very gateways it inspects. signal.SIGKILL does not exist
+#   there, start_new_session is ignored, `tail -f` is absent, and there is no
+#   Windows unit for `service` to emit. Rather than ship a half-working
+#   supervisor with a destructive probe, Windows is routed to the Docker path
+#   (docker compose up -d), which supervises properly via restart policies.
+WINDOWS_LIFECYCLE_MSG = (
+    "ERROR: the native gateway lifecycle is POSIX-only (macOS/Linux).\n"
+    "       On Windows use the Docker path instead:  docker compose up -d\n"
+    "       See ORCHESTRATION.md §A."
+)
+
+
+def require_posix_lifecycle() -> None:
+    if IS_WINDOWS:
+        raise SystemExit(WINDOWS_LIFECYCLE_MSG)
+
+
 def hermes_bin() -> str:
     return os.environ.get("HERMES_BIN", "hermes")
 
@@ -1217,6 +1249,11 @@ def _is_zombie(pid: int) -> bool:
 def pid_alive(pid: int) -> bool:
     if pid is None or pid < 1:
         return False
+    if IS_WINDOWS:
+        # NEVER os.kill(pid, 0) here — on Windows that terminates the target.
+        # The native lifecycle is unsupported on Windows anyway; report not-alive
+        # rather than probing destructively.
+        return False
     try:
         os.kill(pid, 0)
     except ProcessLookupError:
@@ -1256,6 +1293,7 @@ def start_gateway(hermes_home: Path, profile: str) -> int:
 
 
 def cmd_up(args: argparse.Namespace) -> int:
+    require_posix_lifecycle()
     config = load_valid_config(Path(args.config))
     hermes_home = resolve_hermes_home(args)
     if shutil.which(hermes_bin()) is None:
@@ -1309,6 +1347,7 @@ def stop_pid(pid: int, timeout: float = 10.0) -> str:
 
 
 def cmd_down(args: argparse.Namespace) -> int:
+    require_posix_lifecycle()
     config = load_valid_config(Path(args.config))
     hermes_home = resolve_hermes_home(args)
     state = load_gateways(hermes_home)
@@ -1328,6 +1367,7 @@ def cmd_down(args: argparse.Namespace) -> int:
 
 
 def cmd_restart(args: argparse.Namespace) -> int:
+    require_posix_lifecycle()
     rc = cmd_down(args)
     if rc != 0:
         return rc
@@ -1335,6 +1375,7 @@ def cmd_restart(args: argparse.Namespace) -> int:
 
 
 def cmd_logs(args: argparse.Namespace) -> int:
+    require_posix_lifecycle()
     config = load_valid_config(Path(args.config))
     hermes_home = resolve_hermes_home(args)
     profiles = selected_profiles(config, args.profile)
@@ -1394,6 +1435,7 @@ LAUNCHD_PLIST = """\
 
 
 def cmd_service(args: argparse.Namespace) -> int:
+    require_posix_lifecycle()
     config = load_valid_config(Path(args.config))
     hermes_home = resolve_hermes_home(args)
     profiles = selected_profiles(config, args.profile)

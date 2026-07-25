@@ -348,9 +348,32 @@ class LifecycleTests(unittest.TestCase):
         self.assertFalse(companyctl.pid_alive(0))
         self.assertFalse(companyctl.pid_alive(None))
 
+    @unittest.skipIf(companyctl.IS_WINDOWS, "native lifecycle is POSIX-only")
     def test_pid_alive_true_for_self(self):
         import os as _os
         self.assertTrue(companyctl.pid_alive(_os.getpid()))
+
+    def test_pid_alive_never_probes_destructively_on_windows(self):
+        """os.kill(pid, 0) TERMINATES the target on Windows, so pid_alive must
+        not reach it there — a status refresh would kill every gateway."""
+        import os as _os
+        from unittest import mock
+        with mock.patch.object(companyctl, "IS_WINDOWS", True):
+            with mock.patch.object(companyctl.os, "kill") as killed:
+                self.assertFalse(companyctl.pid_alive(_os.getpid()))
+                killed.assert_not_called()
+
+    def test_lifecycle_commands_refuse_to_run_on_windows(self):
+        from unittest import mock
+        with mock.patch.object(companyctl, "IS_WINDOWS", True):
+            with self.assertRaises(SystemExit) as cm:
+                companyctl.require_posix_lifecycle()
+            self.assertIn("docker compose up -d", str(cm.exception))
+
+    def test_lifecycle_allowed_on_posix(self):
+        from unittest import mock
+        with mock.patch.object(companyctl, "IS_WINDOWS", False):
+            companyctl.require_posix_lifecycle()  # must not raise
 
     def test_zombie_is_not_alive(self):
         """A gateway whose parent exited lingers as an unreaped zombie; status
