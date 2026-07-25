@@ -40,7 +40,7 @@ v0.1.0(문서 + 최소 스캐폴드)을 **실제 운영 가능한 컨트롤룸**
 | 예산·비용 추적 | — | ✅ 에이전트/모델별 | 위임 |
 | 승인 게이트·감사 로그 | — | ✅ | 위임 + `#approvals` 채널로 표면화 |
 | 회의 오케스트레이션 (Council·War Room·standup 프로토콜) | — | — | ✅ **고유 가치** |
-| **기동·감시·정지 (5 프로필 생명주기)** | 게이트웨이 1개 실행만 | 자기 프로세스만 | ✅ **이 레포** (§3.1 참조) |
+| 게이트웨이 기동·감시·서비스 등록 | ✅ `gateway run`/`install`/`list`/`status` — **프로필별로 이미 제공** | 자기 프로세스만 | 5개 팬아웃만 (§3.2) |
 | 멘션·cascade 규칙, cross-family Critic 관례 | — | — | ✅ **고유 가치** |
 | 역할↔모델 라우팅 규범 (GJC 매핑) | 모델 스위칭만 | 비용 추적만 | ✅ **고유 가치** |
 | 지식 정제 파이프라인 (OpenCrab ingest 규범) | — | — | ✅ **고유 가치** |
@@ -66,6 +66,20 @@ v0.1.0(문서 + 최소 스캐폴드)을 **실제 운영 가능한 컨트롤룸**
 
 참고로 **Hermes·Paperclip 모두 MIT**라 벤더링이 법적으로는 가능합니다. 그럼에도 하지 않는 이유는 라이선스가 아니라 **유지보수**입니다: 활발히 개발되는 코드베이스 두 개를 떠안으면 업그레이드가 머지 충돌이 되고, 낡은 업스트림을 배포하게 됩니다. 대신 **핀된 ref에서 빌드**해 업그레이드를 한 줄 변경으로 유지합니다.
 
+### 3.2 재수정 — Hermes는 생명주기를 이미 갖고 있었다
+
+§3.1에서 저는 경계를 한 칸 되돌리며 *"업스트림 누구도 5-프로필 회사의 생명주기를 책임지지 않는다"* 고 적었습니다. **그것도 틀렸습니다.** hermes-agent 0.19.0을 실제로 설치해 측정한 결과([RUNTIME-CONTRACT.md](./RUNTIME-CONTRACT.md)):
+
+| 실측 | 의미 |
+|------|------|
+| `gateway run` — *foreground*, `gateway start` — *installed 서비스 기동* | Phase 5의 `up`이 **틀린 명령**을 쓰고 있었음 (`start`) |
+| `gateway install` — systemd/launchd 유닛을 **업스트림이 직접 작성**, `--start-on-login` 포함 | `companyctl service`의 자체 유닛은 **중복이자 경쟁** |
+| `gateway list` — 5개 프로필 전부 인식 | 멀티 프로필은 업스트림 1급 개념 |
+
+수정 후 `companyctl up`이 기록한 PID 5개가 `hermes gateway list`가 보고한 PID와 완전히 일치합니다.
+
+**교훈**: 두 번 다 경계를 문서와 추론으로 그으려다 틀렸습니다. **런타임을 설치해 한 번 실행해보는 것**이 두 라운드의 추측보다 정확했습니다. 이 레포에 남는 몫은 5개 프로필 팬아웃과 그 위의 Discord·회의·지식 계층입니다.
+
 ### Phase 5 — 오케스트레이션 (총 M) — ✅ 구현됨
 
 목표: "회사를 켠다"는 단일 명령. 벤더링 없이 조합·생명주기·버전 핀만 소유.
@@ -74,7 +88,7 @@ v0.1.0(문서 + 최소 스캐폴드)을 **실제 운영 가능한 컨트롤룸**
 |---|--------|------|------|
 | 5.1 | `docker-compose.yml` — 게이트웨이 5(프로필별 볼륨·토큰 파일 분리, `restart: unless-stopped`) + Paperclip(`127.0.0.1:3100` 루프백 전용). 업스트림은 **핀된 git ref에서 빌드**, 소스 복사 없음 | `docker-compose.yml` · `.env.example` · `secrets/*.env.example` | M |
 | 5.2 | `companyctl up/down/restart/logs` — 네이티브 경로. detached 기동·PID 추적·이미 뜬 것은 건드리지 않음·프로필 단위 조작 | `scripts/companyctl.py` | M |
-| 5.3 | `companyctl service --emit systemd\|launchd` — 자체 supervisor를 만들지 않고 OS init에 위임 | `scripts/companyctl.py` | S |
+| 5.3 | `companyctl service` — **`hermes gateway install` 팬아웃**(초판은 자체 유닛을 작성했으나 §3.2에서 중복으로 판명) | `scripts/companyctl.py` | S |
 | 5.4 | `status`에 게이트웨이 생존 집계 편입 — **좀비 프로세스를 살아있다고 세지 않음** | `scripts/companyctl.py` | S |
 | 5.5 | `ORCHESTRATION.md` — 두 경로 대조표·업그레이드 절차·미검증 항목 명시 | `ORCHESTRATION.md` | S |
 

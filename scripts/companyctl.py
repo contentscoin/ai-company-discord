@@ -1355,7 +1355,15 @@ def selected_profiles(config: dict, only: str | None) -> list[str]:
 
 
 def start_gateway(hermes_home: Path, profile: str) -> int:
-    """Spawn a detached gateway, returning its pid. Output goes to a log file."""
+    """Spawn a detached gateway, returning its pid. Output goes to a log file.
+
+    Uses `gateway run`, NOT `gateway start`. Verified against hermes-agent
+    0.19.0, whose own help distinguishes them:
+        run    Run gateway in foreground (recommended for WSL, Docker, Termux)
+        start  Start the installed systemd/launchd background service
+    `start` is a service-control verb — it needs `gateway install` to have run
+    first and returns immediately, so the pid we captured would be a control
+    client, not the gateway. `run` is the process we can actually track."""
     log = log_path(hermes_home, profile)
     log.parent.mkdir(parents=True, exist_ok=True)
     handle = log.open("a", encoding="utf-8")
@@ -1363,7 +1371,7 @@ def start_gateway(hermes_home: Path, profile: str) -> int:
     handle.flush()
     env = dict(os.environ, HERMES_HOME=str(hermes_home))
     proc = subprocess.Popen(
-        [hermes_bin(), "-p", profile, "gateway", "start"],
+        [hermes_bin(), "-p", profile, "gateway", "run"],
         stdout=handle,
         stderr=subprocess.STDOUT,
         stdin=subprocess.DEVNULL,
@@ -1479,67 +1487,54 @@ def cmd_logs(args: argparse.Namespace) -> int:
     return 0
 
 
-SYSTEMD_UNIT = """\
-[Unit]
-Description=AI Company Hermes gateway ({profile})
-After=network-online.target
-
-[Service]
-Type=simple
-Environment=HERMES_HOME={home}
-ExecStart={bin} -p {profile} gateway start
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=default.target
-"""
-
-LAUNCHD_PLIST = """\
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
-  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>Label</key><string>sh.aicompany.hermes.{profile}</string>
-  <key>ProgramArguments</key>
-  <array>
-    <string>{bin}</string><string>-p</string><string>{profile}</string>
-    <string>gateway</string><string>start</string>
-  </array>
-  <key>EnvironmentVariables</key>
-  <dict><key>HERMES_HOME</key><string>{home}</string></dict>
-  <key>RunAtLoad</key><true/>
-  <key>KeepAlive</key><true/>
-</dict>
-</plist>
-"""
-
-
 def cmd_service(args: argparse.Namespace) -> int:
+    """Register each profile's gateway as a real OS service.
+
+    This delegates to `hermes gateway install`, which upstream already provides
+    per profile — it writes the systemd unit / launchd plist itself, with
+    --start-on-login for boot survival. An earlier version of this command
+    hand-wrote competing units running `gateway start`; that was wrong twice
+    over (it duplicated upstream, and `start` only drives an already-installed
+    service). All this adds is the fan-out across the five profiles."""
     require_posix_lifecycle()
     config = load_valid_config(Path(args.config))
     hermes_home = resolve_hermes_home(args)
     profiles = selected_profiles(config, args.profile)
-    template = SYSTEMD_UNIT if args.emit == "systemd" else LAUNCHD_PLIST
-    suffix = ".service" if args.emit == "systemd" else ".plist"
-    stem = "ai-company-hermes-{p}" if args.emit == "systemd" else "sh.aicompany.hermes.{p}"
+    if shutil.which(hermes_bin()) is None:
+        die(f"ERROR: '{hermes_bin()}' not found on PATH. Install Hermes, or set HERMES_BIN.")
 
-    if args.out:
-        out_dir = Path(args.out).expanduser()
-        out_dir.mkdir(parents=True, exist_ok=True)
-        for p in profiles:
-            f = out_dir / (stem.format(p=p) + suffix)
-            f.write_text(template.format(profile=p, home=hermes_home, bin=hermes_bin()), encoding="utf-8")
-            print(f"wrote {f}")
-        hint = ("systemctl --user daemon-reload && systemctl --user enable --now ai-company-hermes-ceo"
-                if args.emit == "systemd" else
-                "launchctl load ~/Library/LaunchAgents/sh.aicompany.hermes.ceo.plist")
-        print(f"\nenable with:  {hint}")
-    else:
-        for p in profiles:
-            print(f"# ---- {stem.format(p=p)}{suffix} ----")
-            print(template.format(profile=p, home=hermes_home, bin=hermes_bin()))
+    env = dict(os.environ, HERMES_HOME=str(hermes_home))
+    cmds = [
+        [hermes_bin(), "-p", p, "gateway", "install"]
+        + (["--start-now"] if args.start_now else ["--no-start-now"])
+        + (["--start-on-login"] if args.start_on_login else [])
+        for p in profiles
+    ]
+
+    if not args.apply:
+        print("(dry-run) would run, one per profile:\n")
+        for c in cmds:
+            print("  " + " ".join(c))
+        print("\nRe-run with --apply to install. Uninstall with:")
+        print(f"  {hermes_bin()} -p <profile> gateway uninstall")
+        return 0
+
+    failed = []
+    for profile, cmd in zip(profiles, cmds):
+        print(f"-- {profile}: {' '.join(cmd)}")
+        try:
+            rc = subprocess.run(cmd, env=env, timeout=180).returncode
+        except (OSError, subprocess.SubprocessError) as exc:
+            print(f"   ERROR: {exc}", file=sys.stderr)
+            failed.append(profile)
+            continue
+        if rc != 0:
+            failed.append(profile)
+    if failed:
+        print(f"\nFAILED for: {', '.join(failed)}", file=sys.stderr)
+        return 1
+    print(f"\nInstalled {len(profiles)} gateway service(s). Check with:")
+    print(f"  {hermes_bin()} gateway list")
     return 0
 
 
@@ -1645,10 +1640,12 @@ def build_parser() -> argparse.ArgumentParser:
     _add_hermes_home(p_log)
     p_log.set_defaults(func=cmd_logs)
 
-    p_svc = sub.add_parser("service", help="emit systemd/launchd units for auto-restart")
-    p_svc.add_argument("--emit", choices=["systemd", "launchd"], default="systemd")
+    p_svc = sub.add_parser("service",
+                           help="register each profile's gateway via `hermes gateway install`")
     p_svc.add_argument("--profile", help="only this profile (default: all)")
-    p_svc.add_argument("--out", help="write unit files into this directory (default: print)")
+    p_svc.add_argument("--apply", action="store_true", help="actually install (default: dry-run)")
+    p_svc.add_argument("--start-now", action="store_true", help="start each service after installing")
+    p_svc.add_argument("--start-on-login", action="store_true", help="survive reboot")
     _add_hermes_home(p_svc)
     p_svc.set_defaults(func=cmd_service)
 
