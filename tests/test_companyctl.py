@@ -14,7 +14,7 @@ _spec = importlib.util.spec_from_file_location(
 companyctl = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(companyctl)
 
-TEMPLATE = json.loads((REPO_ROOT / "templates" / "company.discord.json").read_text())
+TEMPLATE = json.loads((REPO_ROOT / "templates" / "company.discord.json").read_text(encoding="utf-8"))
 
 
 class ValidateTests(unittest.TestCase):
@@ -93,9 +93,9 @@ class DoctorTests(unittest.TestCase):
     def _profile(self, base: Path, name: str, token: str) -> None:
         pdir = base / "profiles" / name
         pdir.mkdir(parents=True)
-        (pdir / "SOUL.md").write_text("soul")
-        (pdir / "config.yaml").write_text("discord:\n  require_mention: true\n")
-        (pdir / ".env").write_text(f"DISCORD_BOT_TOKEN={token}\n")
+        (pdir / "SOUL.md").write_text("soul", encoding="utf-8")
+        (pdir / "config.yaml").write_text("discord:\n  require_mention: true\n", encoding="utf-8")
+        (pdir / ".env").write_text(f"DISCORD_BOT_TOKEN={token}\n", encoding="utf-8")
 
     def test_duplicate_token_is_fail(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -132,10 +132,11 @@ class DoctorTests(unittest.TestCase):
             home = Path(tmp)
             pdir = home / "profiles" / "ceo"
             pdir.mkdir(parents=True)
-            (pdir / "SOUL.md").write_text("s")
-            (pdir / ".env").write_text("DISCORD_BOT_TOKEN=X\n")
+            (pdir / "SOUL.md").write_text("s", encoding="utf-8")
+            (pdir / ".env").write_text("DISCORD_BOT_TOKEN=X\n", encoding="utf-8")
             (pdir / "config.yaml").write_text(
-                "discord:\n  require_mention: true\ndiscord:\n  auto_thread: true\n"
+                "discord:\n  require_mention: true\ndiscord:\n  auto_thread: true\n",
+                encoding="utf-8",
             )
             cfg = {"roles": [{"id": "ceo", "hermesProfile": "ceo"}]}
             rows = companyctl.doctor_offline(cfg, home)
@@ -259,9 +260,9 @@ class DoctorModelHintTests(unittest.TestCase):
             home = Path(tmp)
             pdir = home / "profiles" / "ceo"
             pdir.mkdir(parents=True)
-            (pdir / "SOUL.md").write_text("s")
-            (pdir / "config.yaml").write_text("discord:\n")
-            (pdir / ".env").write_text("DISCORD_BOT_TOKEN=X\n")
+            (pdir / "SOUL.md").write_text("s", encoding="utf-8")
+            (pdir / "config.yaml").write_text("discord:\n", encoding="utf-8")
+            (pdir / ".env").write_text("DISCORD_BOT_TOKEN=X\n", encoding="utf-8")
             cfg = {"roles": [{"id": "ceo", "hermesProfile": "ceo"}]}  # no modelHint
             rows = companyctl.doctor_offline(cfg, home)
             self.assertTrue(any("no modelHint" in m for _, m in rows))
@@ -301,10 +302,11 @@ class DoctorRegressionTests(unittest.TestCase):
     def _profile(self, base, name, token, require_mention="true"):
         d = base / "profiles" / name
         d.mkdir(parents=True)
-        (d / "SOUL.md").write_text("s")
-        (d / ".env").write_text(f"DISCORD_BOT_TOKEN={token}\n")
+        (d / "SOUL.md").write_text("s", encoding="utf-8")
+        (d / ".env").write_text(f"DISCORD_BOT_TOKEN={token}\n", encoding="utf-8")
         (d / "config.yaml").write_text(
-            f"discord:\n  require_mention: {require_mention}\nplatform_toolsets:\n  discord: [x]\n"
+            f"discord:\n  require_mention: {require_mention}\nplatform_toolsets:\n  discord: [x]\n",
+            encoding="utf-8",
         )
 
     def test_same_profile_mapped_twice_no_false_shared_fail(self):
@@ -397,7 +399,7 @@ class LifecycleTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
             (home / "ai-company").mkdir(parents=True)
-            (home / "ai-company" / "gateways.json").write_text("{oops")
+            (home / "ai-company" / "gateways.json").write_text("{oops", encoding="utf-8")
             with self.assertRaises(SystemExit):
                 companyctl.load_gateways(home)
 
@@ -424,7 +426,7 @@ class MapAndInputTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
             (home / "ai-company").mkdir(parents=True)
-            (home / "ai-company" / "discord.map.json").write_text("{bad json")
+            (home / "ai-company" / "discord.map.json").write_text("{bad json", encoding="utf-8")
             with self.assertRaises(SystemExit):
                 companyctl.load_map(home)
 
