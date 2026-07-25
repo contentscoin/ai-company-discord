@@ -35,7 +35,7 @@
 |------|------|------|
 | `#dev` | 구현·PR·Cursor/Codex 알림 | CTO + Loop + Critic |
 | `#loop` | DoD·VALIDATION·리뷰 루프 | Loop + CTO + Critic |
-| `#growth` | SNS·캘린더·콘텐츠 | Growth (+ CEO) |
+| `#growth` | SNS·캘린더·콘텐츠 — 실행 스택 연동 규약은 [GROWTH.md](./GROWTH.md) | Growth (+ CEO) |
 | `#paperclip-feed` | Paperclip 이슈 알림 미러 (선택) | Exec |
 
 ### 🧠 knowledge

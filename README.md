@@ -15,6 +15,7 @@ Role routing follows the spirit of [GJC multivendor setup](https://github.com/pr
 | Meeting / souls | Discord + Hermes profiles |
 | Org / tasks / budgets | Paperclip |
 | Dev center | **Cursor** (+ Codex / Claude satellites) |
+| Growth execution | [social-ai-team-custom](https://github.com/contentscoin/social-ai-team-custom) skills — protocol in [GROWTH.md](./GROWTH.md) |
 | Product framework (optional) | [akanjs](https://github.com/akan-team/akanjs) — full-stack TS, candidate |
 | Knowledge | OpenCrab + Workmate ingest |
 | Model routing (optional) | GJC `daily` / `coding-sprint` / `cyber-cop` |
@@ -136,6 +137,7 @@ Exit codes are uniform across both modes:
 | [PROTOCOLS.md](./PROTOCOLS.md) | Machine-readable DECISION / VERDICT / PASS-FAIL specs (PROTOCOL v1) |
 | [ORCHESTRATION.md](./ORCHESTRATION.md) | Bring the company up: Docker Compose or native lifecycle |
 | [PAPERCLIP.md](./PAPERCLIP.md) | Measured Paperclip contract: issues API, built-in adapters, boot pitfalls |
+| [GROWTH.md](./GROWTH.md) | Growth ↔ social-ai-team-custom protocol: brief/publish blocks, gate mapping |
 | [DESKTOP.md](./DESKTOP.md) | Plan for the desktop app and installer (architecture, phases, what breaks) |
 | [ALIGNMENT.md](./ALIGNMENT.md) | Audit against the original brief; Phase 6 plan (Cursor API, adapter, SNS) |
 | [ROADMAP.md](./ROADMAP.md) | Enhancement roadmap (phases 1–5, upstream boundaries) |

@@ -1,7 +1,7 @@
 {
   "$schema": "./company.schema.json",
   "name": "solo-founder-discord",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "protocolVersion": "1",
   "meetingChannel": "discord",
   "hotlineChannel": "telegram-dm-optional",
@@ -27,6 +27,15 @@
         "note": "Bun+React+SQLite, schema SSoT -> API -> UI codegen; ships web/mobile/server from one TS source. Provides AI-agent guideline generation."
       }
     ]
+  },
+  "growthCenter": {
+    "stack": "social-ai-team-custom",
+    "ref": "https://github.com/contentscoin/social-ai-team-custom",
+    "runtime": "claude-code-skills",
+    "director": "/content-director",
+    "publishGate": "approvals",
+    "sharedKnowledge": "opencrab",
+    "note": "Skill stack owned by the social repo; this repo owns only the #growth/#approvals protocol. See GROWTH.md."
   },
   "meetings": {
     "timezone": "Asia/Seoul",

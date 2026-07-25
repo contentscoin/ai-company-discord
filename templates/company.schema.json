@@ -40,6 +40,20 @@
         }
       }
     },
+    "growthCenter": {
+      "type": "object",
+      "description": "Growth execution stack binding (protocol in GROWTH.md). The stack itself lives in its own repo; this records what the meeting plane delegates to.",
+      "additionalProperties": true,
+      "properties": {
+        "stack": { "type": "string" },
+        "ref": { "type": "string" },
+        "runtime": { "type": "string" },
+        "director": { "type": "string", "description": "Entry skill run in the client work folder (main thread), e.g. /content-director." },
+        "publishGate": { "type": "string", "description": "Discord channel name that must approve before /publisher runs (gate 7 promotion)." },
+        "sharedKnowledge": { "type": "string" },
+        "note": { "type": "string" }
+      }
+    },
     "meetings": {
       "type": "object",
       "additionalProperties": true,
