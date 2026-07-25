@@ -73,7 +73,7 @@
 - 비용 규약: 이 경로의 과금은 **커서 플랜 크레딧**(원질문의 의도 충족). 프로필 대화는 여전히 LLM 키 — [COSTS.md](./COSTS.md)에 이원 구조 명시
 - DoD: 위임 1건이 실제 PR로 돌아오는 왕복 실측
 - **진행 상황**: 도구는 구현됨 — `companyctl verify-cursor`(표면 실측→`CURSOR-CONTRACT.md`)와 `companyctl delegate`(기본 dry-run, `--apply`시에만 크레딧 소모·브랜치 푸시). 단 **이 샌드박스의 이그레스 정책이 `api.cursor.com`을 차단**해 실측은 미완 — 환경 네트워크 정책에서 `api.cursor.com`을 허용하거나 로컬에서 `CURSOR_API_KEY=... companyctl verify-cursor --out CURSOR-CONTRACT.md` 1회 실행 필요
-- **6.1 실측이 연 새 경로**: Paperclip에 `cursor` 어댑터(모델 39종)와 `cursor_cloud` 어댑터가 **내장**되어 있음 ([PAPERCLIP.md](./PAPERCLIP.md) §5). CTO 에이전트를 `adapterType: "cursor"`로 만들면 delegate 없이 Paperclip 자체가 커서로 실행을 위임할 가능성 — 요구사항(cursor-agent CLI? 키? 과금 주체)을 다음 측정 대상으로 추가. `companyctl delegate`는 그와 무관하게 Discord발 수동 위임 경로로 유효
+- **6.1 실측이 연 새 경로 → 측정 완료**: Paperclip 내장 `cursor` 어댑터의 과금 로직을 dist에서 직접 확인 ([PAPERCLIP.md](./PAPERCLIP.md) §5.1) — `CURSOR_API_KEY` 없이 `agent login`(Cursor CLI)만으로 인증하면 `billingType: "subscription"`, biller `"cursor"`. **즉 원질문의 "커서 요금제로 작동"은 CTO 실행 축에서 API 키 없이 성립합니다.** `cursor_cloud`는 반대로 `CURSOR_API_KEY` 필수(실측). 권장 구도: CTO 에이전트 = `adapterType: "cursor"` + `agent login` (구독 과금), `companyctl delegate` = 원격/보조 경로 (API 과금, `api.cursor.com` 필요). 남은 검증은 사용자 환경에서 실행 왕복 1회 — 이 샌드박스에는 `agent` CLI가 없음
 
 ### 6.3 Growth 실행 계층 — social-ai-team-custom 연동 (M)
 

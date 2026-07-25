@@ -38,11 +38,12 @@ python3 scripts/companyctl.py doctor   # modelHint 미설정 역할을 WARN
 
 ## 이원 과금 구조 — 커서 요금제 vs LLM 키
 
-원질문("커서 요금제로 프로필 작동")의 실측 답([ALIGNMENT.md](./ALIGNMENT.md) §1)에 따라 비용은 두 갈래입니다:
+원질문("커서 요금제로 프로필 작동")의 실측 답([ALIGNMENT.md](./ALIGNMENT.md) §1, [PAPERCLIP.md](./PAPERCLIP.md) §5.1)에 따라 비용은 두 갈래이고, CTO 실행 축에는 경로가 둘 있습니다:
 
 | 노동 | 과금 주체 | 도구 |
 |------|-----------|------|
-| CTO의 **코딩 실행** (이슈→구현→PR) | **Cursor 플랜 크레딧** (Cloud Agents API) | `companyctl delegate` |
+| CTO의 **코딩 실행** — 기본 경로 | **커서 구독 요금제** (`agent login`, 키 불필요 — 실측) | Paperclip `cursor` 어댑터 |
+| CTO의 **코딩 실행** — 원격/보조 | Cursor 플랜 크레딧 (Cloud Agents **API**) | `companyctl delegate` / `cursor_cloud` 어댑터 |
 | 프로필 5개의 **대화·회의·오케스트레이션** | LLM API 키 (Anthropic/OpenAI/OpenRouter) | Hermes 게이트웨이 |
 
-Cursor 키는 `CURSOR_API_KEY` 환경변수로만 전달합니다. API 표면 실측은 `companyctl verify-cursor` → `CURSOR-CONTRACT.md`.
+주의: `cursor` 어댑터 env에 `CURSOR_API_KEY`나 `OPENAI_API_KEY`를 넣는 순간 과금이 **API로 전환**됩니다(실측된 판정 로직). 구독 과금을 원하면 키를 비우고 `agent login`만 사용하세요. Cursor 키가 필요한 경로에서는 `CURSOR_API_KEY` 환경변수로만 전달합니다. API 표면 실측은 `companyctl verify-cursor` → `CURSOR-CONTRACT.md`.
