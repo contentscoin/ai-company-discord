@@ -26,6 +26,7 @@ Subcommands:
   restart     down + up
   logs        show a gateway's log
   service     emit systemd/launchd units for real auto-restart supervision
+  verify-runtime  probe how Hermes actually starts; write RUNTIME-CONTRACT.md
 
 Secrets are never read from arguments and never printed. Runtime state
 (channel maps, decision logs) lives under ~/.hermes/ai-company/, never in
@@ -1544,6 +1545,256 @@ def cmd_service(args: argparse.Namespace) -> int:
 
 
 # --------------------------------------------------------------------------- #
+# verify-runtime — settle the assumptions this project rests on
+#
+# Two things are assumed everywhere and verified nowhere:
+#   1. `hermes -p <p> gateway start` is a blocking foreground process, so the
+#      pid `up` records is the gateway. If it is instead a service-control verb
+#      (asking launchd/systemd/schtasks to run a unit and returning), the pid is
+#      a control client: `status` reports DOWN for a healthy company and `up`
+#      relaunches something already running.
+#   2. the compose image selects its profile from HERMES_PROFILE. If it does
+#      not, all five containers boot the same profile and five bots answer as
+#      one soul — while `docker compose ps` stays green.
+#
+# Neither can be settled from documentation (the docs site 403s). This runs the
+# experiments on a machine that actually has the runtime and writes down the
+# answer, so the rest of the project stops guessing.
+# --------------------------------------------------------------------------- #
+GATEWAY_PROBE_SECONDS = 8.0
+
+
+def probe_gateway_subcommands(timeout: float = 20.0) -> dict:
+    """Capture `hermes gateway --help` and look for a service-registration verb."""
+    if shutil.which(hermes_bin()) is None:
+        return {"available": False, "reason": f"'{hermes_bin()}' not on PATH"}
+    try:
+        out = subprocess.run([hermes_bin(), "gateway", "--help"],
+                             capture_output=True, text=True, timeout=timeout)
+    except (OSError, subprocess.SubprocessError) as exc:
+        return {"available": False, "reason": str(exc)}
+    text = ((out.stdout or "") + (out.returncode and (out.stderr or "") or "")).strip() or (out.stderr or "")
+    found = sorted({v for v in ("setup", "start", "stop", "restart", "status",
+                                "install", "uninstall", "enable", "disable", "logs")
+                    if re.search(rf"(?m)^\s*{v}\b", text)})
+    return {
+        "available": True,
+        "exitCode": out.returncode,
+        "subcommands": found,
+        "hasInstall": "install" in found,
+        "helpText": text[:4000],
+    }
+
+
+def probe_gateway_start_semantics(profile: str, hermes_home: Path,
+                                  seconds: float = GATEWAY_PROBE_SECONDS) -> dict:
+    """Start a gateway and watch whether the process we spawned stays alive.
+
+    Still running after `seconds` -> blocking foreground process; pid tracking
+    is valid. Exited almost immediately -> service-control verb; pid tracking is
+    NOT valid and `up`/`status` must be rewritten to delegate to the unit."""
+    if shutil.which(hermes_bin()) is None:
+        return {"ran": False, "reason": f"'{hermes_bin()}' not on PATH"}
+    env = dict(os.environ, HERMES_HOME=str(hermes_home))
+    started = time.monotonic()
+    try:
+        proc = subprocess.Popen(
+            [hermes_bin(), "-p", profile, "gateway", "start"],
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            stdin=subprocess.DEVNULL, start_new_session=True, text=True, env=env,
+        )
+    except OSError as exc:
+        return {"ran": False, "reason": str(exc)}
+
+    try:
+        proc.wait(timeout=seconds)
+        elapsed = time.monotonic() - started
+        output = (proc.stdout.read() if proc.stdout else "") or ""
+        verdict = "service-control" if proc.returncode == 0 else "failed"
+        return {
+            "ran": True, "verdict": verdict, "pid": proc.pid,
+            "exitedAfterSeconds": round(elapsed, 2), "exitCode": proc.returncode,
+            "output": output[:2000],
+            "pidTrackingValid": False,
+        }
+    except subprocess.TimeoutExpired:
+        # Still alive: this is a real foreground gateway.
+        proc.terminate()
+        try:
+            proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+        return {
+            "ran": True, "verdict": "blocking-process", "pid": proc.pid,
+            "survivedSeconds": seconds, "pidTrackingValid": True,
+        }
+    finally:
+        if proc.stdout:
+            proc.stdout.close()
+
+
+def probe_service_units(hermes_home: Path) -> dict:
+    """If `start` registered a unit somewhere, name it — that is who owns restarts."""
+    home = Path.home()
+    candidates = {
+        "launchd": list((home / "Library" / "LaunchAgents").glob("*hermes*"))
+        if (home / "Library" / "LaunchAgents").is_dir() else [],
+        "systemd": list((home / ".config" / "systemd" / "user").glob("*hermes*"))
+        if (home / ".config" / "systemd" / "user").is_dir() else [],
+    }
+    return {k: [str(p) for p in v] for k, v in candidates.items()}
+
+
+def probe_docker() -> dict:
+    if shutil.which("docker") is None:
+        return {"available": False, "reason": "docker not on PATH"}
+    try:
+        info = subprocess.run(["docker", "info"], capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.SubprocessError) as exc:
+        return {"available": False, "reason": str(exc)}
+    return {"available": info.returncode == 0,
+            "reason": None if info.returncode == 0 else "daemon not responding"}
+
+
+def render_runtime_contract(findings: dict) -> str:
+    g = findings["gatewaySubcommands"]
+    s = findings["gatewayStart"]
+    lines = [
+        "# RUNTIME CONTRACT",
+        "",
+        "Generated by `companyctl verify-runtime` on the machine that actually has",
+        "the runtime. This file replaces the guesses in ORCHESTRATION.md §D.",
+        "",
+        f"- date: {findings['date']}",
+        f"- platform: {findings['platform']}",
+        f"- hermes binary: `{findings['hermesBin']}`",
+        "",
+        "## 1. `hermes gateway` subcommands",
+        "",
+    ]
+    if not g.get("available"):
+        lines += [f"NOT DETERMINED — {g.get('reason')}", ""]
+    else:
+        lines += [f"- detected: {', '.join(g['subcommands']) or '(none parsed)'}",
+                  f"- has an `install` (service-registration) verb: **{g['hasInstall']}**", "",
+                  "```", g.get("helpText", "").strip(), "```", ""]
+
+    lines += ["## 2. Does `gateway start` block?", ""]
+    if not s.get("ran"):
+        lines += [f"NOT DETERMINED — {s.get('reason')}", ""]
+    elif s["verdict"] == "blocking-process":
+        lines += [
+            f"**BLOCKING PROCESS** — survived {s['survivedSeconds']}s in the foreground.",
+            "",
+            "The pid `companyctl up` records IS the gateway. The native lifecycle in",
+            "ORCHESTRATION.md §B is correct as written; no change needed.",
+            "",
+        ]
+    elif s["verdict"] == "service-control":
+        lines += [
+            f"**SERVICE-CONTROL VERB** — exited after {s['exitedAfterSeconds']}s with code 0.",
+            "",
+            "> The pid `companyctl up` records is a control client, not the gateway.",
+            "> `status` will report DOWN for a healthy company and `up` will relaunch",
+            "> something already running. **The native lifecycle must be rewritten to",
+            "> delegate to the service unit instead of tracking pids.**",
+            "",
+            "```", s.get("output", "").strip(), "```", "",
+        ]
+    else:
+        lines += [f"**FAILED** — exit code {s.get('exitCode')} after "
+                  f"{s.get('exitedAfterSeconds')}s. Fix the invocation before concluding.",
+                  "", "```", s.get("output", "").strip(), "```", ""]
+
+    units = findings["serviceUnits"]
+    lines += ["## 3. Service units present", ""]
+    if any(units.values()):
+        lines += [f"- {k}: {', '.join(v)}" for k, v in units.items() if v]
+        lines += ["", "These own restarts. `companyctl service` must not fight them —"
+                      " check for duplicates before emitting units of our own."]
+    elif s.get("verdict") == "service-control":
+        lines += ["None found, yet `start` returned immediately. Look for the unit"
+                  " elsewhere (schtasks, a system-level path, or a different naming"
+                  " scheme) before assuming pid tracking is safe."]
+    else:
+        lines += ["(none found — consistent with a foreground process)"]
+
+    d = findings["docker"]
+    lines += ["", "## 4. Docker", "",
+              f"- daemon available: **{d.get('available')}**"
+              + (f" ({d['reason']})" if d.get("reason") else ""), ""]
+    lines += [
+        "## 5. Still manual",
+        "",
+        "How the compose image selects its profile cannot be probed from outside the",
+        "container. After `docker compose up -d`, confirm the five gateways are five",
+        "DISTINCT bots — not five copies of one — by checking each token's identity:",
+        "",
+        "```bash",
+        "companyctl doctor --online     # per-token GET /users/@me",
+        "```",
+        "",
+        "Five identical bot usernames means `HERMES_PROFILE` is not the selector and",
+        "each service's `environment`/`command` in docker-compose.yml needs adjusting.",
+        "Green containers are not evidence of correct profiles.",
+        "",
+        "## 6. Pin",
+        "",
+        "Record the exact upstream ref this contract was observed against, and set it",
+        "in `.env` so the finding stays true:",
+        "",
+        "```",
+        "HERMES_REF=<commit-sha>",
+        "```",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def cmd_verify_runtime(args: argparse.Namespace) -> int:
+    require_posix_lifecycle()
+    hermes_home = resolve_hermes_home(args)
+    config = load_valid_config(Path(args.config))
+    profile = args.profile or config["roles"][0]["hermesProfile"]
+
+    print(f"Probing the runtime contract (profile: {profile}). This starts and stops")
+    print(f"a real gateway and takes about {int(args.seconds)}s.\n")
+
+    findings = {
+        "date": datetime.date.today().isoformat(),
+        "platform": sys.platform,
+        "hermesBin": hermes_bin(),
+        "profile": profile,
+        "gatewaySubcommands": probe_gateway_subcommands(),
+        "gatewayStart": probe_gateway_start_semantics(profile, hermes_home, args.seconds),
+        "serviceUnits": probe_service_units(hermes_home),
+        "docker": probe_docker(),
+    }
+
+    if args.json:
+        print(json.dumps(findings, ensure_ascii=False, indent=2))
+        return 0
+
+    contract = render_runtime_contract(findings)
+    out = Path(args.out).expanduser() if args.out else None
+    if out:
+        out.write_text(contract, encoding="utf-8")
+        print(f"Wrote {out}")
+    else:
+        print(contract)
+
+    s = findings["gatewayStart"]
+    if s.get("verdict") == "service-control":
+        print("\n!! The native lifecycle assumption is WRONG on this machine.",
+              file=sys.stderr)
+        print("   See section 2 of the contract.", file=sys.stderr)
+        return 1
+    if not s.get("ran") or s.get("verdict") == "failed":
+        return 2
+    return 0
+
+
+# --------------------------------------------------------------------------- #
 # Entry point
 # --------------------------------------------------------------------------- #
 def _add_hermes_home(parser: argparse.ArgumentParser) -> None:
@@ -1644,6 +1895,16 @@ def build_parser() -> argparse.ArgumentParser:
     p_log.add_argument("-f", "--follow", action="store_true", help="follow the log")
     _add_hermes_home(p_log)
     p_log.set_defaults(func=cmd_logs)
+
+    p_ver = sub.add_parser("verify-runtime",
+                           help="probe how Hermes actually starts, and write RUNTIME-CONTRACT.md")
+    p_ver.add_argument("--profile", help="profile to probe with (default: first role)")
+    p_ver.add_argument("--seconds", type=float, default=GATEWAY_PROBE_SECONDS,
+                       help=f"how long to watch the gateway (default: {GATEWAY_PROBE_SECONDS})")
+    p_ver.add_argument("--out", help="write the contract here (default: print)")
+    p_ver.add_argument("--json", action="store_true", help="raw findings instead of the contract")
+    _add_hermes_home(p_ver)
+    p_ver.set_defaults(func=cmd_verify_runtime)
 
     p_svc = sub.add_parser("service", help="emit systemd/launchd units for auto-restart")
     p_svc.add_argument("--emit", choices=["systemd", "launchd"], default="systemd")

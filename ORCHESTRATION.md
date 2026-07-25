@@ -97,6 +97,15 @@ launchctl load ~/Library/LaunchAgents/sh.aicompany.hermes.ceo.plist
 
 ## D. 아직 검증되지 않은 것
 
+> **먼저 이것부터 실행하세요.** 아래 미확인 항목 중 가장 중요한 것은 명령 하나로 판별됩니다:
+>
+> ```bash
+> companyctl verify-runtime --out RUNTIME-CONTRACT.md
+> ```
+>
+> 실제 Hermes가 설치된 기계에서 게이트웨이를 한 번 띄웠다 내리며 **`gateway start`가 포그라운드 프로세스인지 서비스 제어 명령인지**를 실측하고, 결과를 `RUNTIME-CONTRACT.md`로 남깁니다.
+> 종료 코드 `0`이면 아래 네이티브 경로 설계가 맞습니다. **`1`이면 틀렸다는 뜻**이고(추적한 PID가 게이트웨이가 아님), 계약서가 무엇을 바꿔야 하는지 적어줍니다.
+
 정직하게 남깁니다. 이 환경에는 Docker 데몬이 없어 **이미지 빌드와 실제 기동은 확인하지 못했습니다.**
 
 - ✅ 확인됨: compose 스펙 유효(`docker compose config`), 6개 서비스·볼륨 해석, `HERMES_REF` 버전 핀이 빌드 context에 실제 반영

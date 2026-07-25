@@ -102,6 +102,7 @@ One dependency-free CLI (Python 3 stdlib) driven by `templates/company.discord.j
 | `up` / `down` / `restart` | Start, stop, and restart every profile's Hermes gateway |
 | `logs` | Show a gateway's log (`--profile ceo -f`) |
 | `service` | Emit systemd/launchd units so the init system handles auto-restart |
+| `verify-runtime` | Probe how Hermes actually starts and write RUNTIME-CONTRACT.md |
 
 Secrets are read only from the environment or `.env` and are never printed. Runtime state lives under `~/.hermes/ai-company/`, never in this repo.
 
