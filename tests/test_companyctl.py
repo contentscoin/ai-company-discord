@@ -14,7 +14,7 @@ _spec = importlib.util.spec_from_file_location(
 companyctl = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(companyctl)
 
-TEMPLATE = json.loads((REPO_ROOT / "templates" / "company.discord.json").read_text())
+TEMPLATE = json.loads((REPO_ROOT / "templates" / "company.discord.json").read_text(encoding="utf-8"))
 
 
 class ValidateTests(unittest.TestCase):
@@ -93,9 +93,9 @@ class DoctorTests(unittest.TestCase):
     def _profile(self, base: Path, name: str, token: str) -> None:
         pdir = base / "profiles" / name
         pdir.mkdir(parents=True)
-        (pdir / "SOUL.md").write_text("soul")
-        (pdir / "config.yaml").write_text("discord:\n  require_mention: true\n")
-        (pdir / ".env").write_text(f"DISCORD_BOT_TOKEN={token}\n")
+        (pdir / "SOUL.md").write_text("soul", encoding="utf-8")
+        (pdir / "config.yaml").write_text("discord:\n  require_mention: true\n", encoding="utf-8")
+        (pdir / ".env").write_text(f"DISCORD_BOT_TOKEN={token}\n", encoding="utf-8")
 
     def test_duplicate_token_is_fail(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -132,10 +132,11 @@ class DoctorTests(unittest.TestCase):
             home = Path(tmp)
             pdir = home / "profiles" / "ceo"
             pdir.mkdir(parents=True)
-            (pdir / "SOUL.md").write_text("s")
-            (pdir / ".env").write_text("DISCORD_BOT_TOKEN=X\n")
+            (pdir / "SOUL.md").write_text("s", encoding="utf-8")
+            (pdir / ".env").write_text("DISCORD_BOT_TOKEN=X\n", encoding="utf-8")
             (pdir / "config.yaml").write_text(
-                "discord:\n  require_mention: true\ndiscord:\n  auto_thread: true\n"
+                "discord:\n  require_mention: true\ndiscord:\n  auto_thread: true\n",
+                encoding="utf-8",
             )
             cfg = {"roles": [{"id": "ceo", "hermesProfile": "ceo"}]}
             rows = companyctl.doctor_offline(cfg, home)
@@ -259,9 +260,9 @@ class DoctorModelHintTests(unittest.TestCase):
             home = Path(tmp)
             pdir = home / "profiles" / "ceo"
             pdir.mkdir(parents=True)
-            (pdir / "SOUL.md").write_text("s")
-            (pdir / "config.yaml").write_text("discord:\n")
-            (pdir / ".env").write_text("DISCORD_BOT_TOKEN=X\n")
+            (pdir / "SOUL.md").write_text("s", encoding="utf-8")
+            (pdir / "config.yaml").write_text("discord:\n", encoding="utf-8")
+            (pdir / ".env").write_text("DISCORD_BOT_TOKEN=X\n", encoding="utf-8")
             cfg = {"roles": [{"id": "ceo", "hermesProfile": "ceo"}]}  # no modelHint
             rows = companyctl.doctor_offline(cfg, home)
             self.assertTrue(any("no modelHint" in m for _, m in rows))
@@ -301,10 +302,11 @@ class DoctorRegressionTests(unittest.TestCase):
     def _profile(self, base, name, token, require_mention="true"):
         d = base / "profiles" / name
         d.mkdir(parents=True)
-        (d / "SOUL.md").write_text("s")
-        (d / ".env").write_text(f"DISCORD_BOT_TOKEN={token}\n")
+        (d / "SOUL.md").write_text("s", encoding="utf-8")
+        (d / ".env").write_text(f"DISCORD_BOT_TOKEN={token}\n", encoding="utf-8")
         (d / "config.yaml").write_text(
-            f"discord:\n  require_mention: {require_mention}\nplatform_toolsets:\n  discord: [x]\n"
+            f"discord:\n  require_mention: {require_mention}\nplatform_toolsets:\n  discord: [x]\n",
+            encoding="utf-8",
         )
 
     def test_same_profile_mapped_twice_no_false_shared_fail(self):
@@ -329,13 +331,114 @@ class DoctorRegressionTests(unittest.TestCase):
             self.assertTrue(any(l == "FAIL" and "require_mention is false" in m for l, m in rows))
 
 
+class LifecycleTests(unittest.TestCase):
+    CFG = {"roles": [
+        {"id": "ceo", "hermesProfile": "ceo"},
+        {"id": "cto", "hermesProfile": "cto"},
+    ]}
+
+    def test_selected_profiles_all_and_one(self):
+        self.assertEqual(companyctl.selected_profiles(self.CFG, None), ["ceo", "cto"])
+        self.assertEqual(companyctl.selected_profiles(self.CFG, "cto"), ["cto"])
+
+    def test_unknown_profile_is_clean_exit(self):
+        with self.assertRaises(SystemExit):
+            companyctl.selected_profiles(self.CFG, "nope")
+
+    def test_pid_alive_rejects_impossible_pids(self):
+        self.assertFalse(companyctl.pid_alive(-1))
+        self.assertFalse(companyctl.pid_alive(0))
+        self.assertFalse(companyctl.pid_alive(None))
+
+    @unittest.skipIf(companyctl.IS_WINDOWS, "native lifecycle is POSIX-only")
+    def test_pid_alive_true_for_self(self):
+        import os as _os
+        self.assertTrue(companyctl.pid_alive(_os.getpid()))
+
+    def test_pid_alive_never_probes_destructively_on_windows(self):
+        """os.kill(pid, 0) TERMINATES the target on Windows, so pid_alive must
+        not reach it there — a status refresh would kill every gateway."""
+        import os as _os
+        from unittest import mock
+        with mock.patch.object(companyctl, "IS_WINDOWS", True):
+            with mock.patch.object(companyctl.os, "kill") as killed:
+                self.assertFalse(companyctl.pid_alive(_os.getpid()))
+                killed.assert_not_called()
+
+    def test_lifecycle_commands_refuse_to_run_on_windows(self):
+        from unittest import mock
+        with mock.patch.object(companyctl, "IS_WINDOWS", True):
+            with self.assertRaises(SystemExit) as cm:
+                companyctl.require_posix_lifecycle()
+            self.assertIn("docker compose up -d", str(cm.exception))
+
+    def test_lifecycle_allowed_on_posix(self):
+        from unittest import mock
+        with mock.patch.object(companyctl, "IS_WINDOWS", False):
+            companyctl.require_posix_lifecycle()  # must not raise
+
+    @unittest.skipIf(companyctl.IS_WINDOWS, "zombies are a POSIX concept; lifecycle is POSIX-only")
+    def test_zombie_is_not_alive(self):
+        """A gateway whose parent exited lingers as an unreaped zombie; status
+        must not count it as up."""
+        import os as _os, subprocess as _sp, time as _t
+        proc = _sp.Popen(["sleep", "30"], start_new_session=True,
+                         stdout=_sp.DEVNULL, stderr=_sp.DEVNULL)
+        pid = proc.pid
+        self.assertTrue(companyctl.pid_alive(pid))
+        proc.kill()
+        # Do NOT wait() — leaving it unreaped is exactly the zombie case.
+        for _ in range(50):
+            if companyctl._is_zombie(pid) or not _os.path.exists(f"/proc/{pid}"):
+                break
+            _t.sleep(0.05)
+        self.assertFalse(companyctl.pid_alive(pid))
+        proc.wait()  # clean up the test's own child
+
+    def test_corrupt_gateway_state_is_clean_exit(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            (home / "ai-company").mkdir(parents=True)
+            (home / "ai-company" / "gateways.json").write_text("{oops", encoding="utf-8")
+            with self.assertRaises(SystemExit):
+                companyctl.load_gateways(home)
+
+    def test_gateway_state_roundtrip(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            companyctl.save_gateways(home, {"ceo": {"pid": 42}})
+            self.assertEqual(companyctl.load_gateways(home)["ceo"]["pid"], 42)
+
+    def test_gateways_are_started_with_run_not_start(self):
+        """`gateway start` drives an already-installed service and returns; only
+        `gateway run` is the foreground process whose pid we can track.
+        Verified against hermes-agent 0.19.0."""
+        from unittest import mock
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.object(companyctl.subprocess, "Popen") as popen:
+                popen.return_value.pid = 4242
+                companyctl.start_gateway(Path(tmp), "ceo")
+            argv = popen.call_args[0][0]
+            self.assertEqual(argv[-3:], ["ceo", "gateway", "run"])
+            self.assertNotIn("start", argv)
+
+    def test_service_delegates_to_hermes_gateway_install(self):
+        """Upstream writes the systemd/launchd unit itself; emitting our own
+        would compete with it."""
+        self.assertFalse(hasattr(companyctl, "SYSTEMD_UNIT"))
+        self.assertFalse(hasattr(companyctl, "LAUNCHD_PLIST"))
+
+
 class MapAndInputTests(unittest.TestCase):
     def test_corrupt_map_raises_clean_systemexit(self):
         import tempfile
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
             (home / "ai-company").mkdir(parents=True)
-            (home / "ai-company" / "discord.map.json").write_text("{bad json")
+            (home / "ai-company" / "discord.map.json").write_text("{bad json", encoding="utf-8")
             with self.assertRaises(SystemExit):
                 companyctl.load_map(home)
 

@@ -2,7 +2,13 @@
 """companyctl — single source-of-truth CLI for ai-company-discord.
 
 Consumes templates/company.discord.json. Python 3 standard library only
-(no `pip install`), so it runs the same on Linux, macOS, and Windows.
+(no `pip install`).
+
+Portability is NOT uniform, despite being stdlib-only. The config and protocol
+commands (validate/scaffold/bootstrap/doctor/standup/decision/lint/digest/
+archive/status) run on Linux, macOS, and Windows. The gateway lifecycle
+(up/down/restart/logs/service) is POSIX-only and refuses to run on Windows,
+where the Docker path supervises instead — see require_posix_lifecycle().
 
 Subcommands:
   validate    check company.discord.json against the schema + filesystem
@@ -15,6 +21,11 @@ Subcommands:
   digest      render a weekly brief from the decision log
   archive     export a meeting thread to sanitized local minutes
   status      one-screen summary of profiles/map/decisions
+  up          start every profile's Hermes gateway (detached)
+  down        stop the gateways started by `up`
+  restart     down + up
+  logs        show a gateway's log
+  service     emit systemd/launchd units for real auto-restart supervision
 
 Secrets are never read from arguments and never printed. Runtime state
 (channel maps, decision logs) lives under ~/.hermes/ai-company/, never in
@@ -30,6 +41,8 @@ import json
 import os
 import re
 import shutil
+import signal
+import subprocess
 import sys
 import time
 import urllib.error
@@ -1140,7 +1153,306 @@ def cmd_status(args: argparse.Namespace) -> int:
 
     marker = state_dir(hermes_home) / "last_standup.txt"
     print(f"last standup: {marker.read_text(encoding='utf-8').strip() if marker.is_file() else 'never'}")
-    print("gateways   : run `hermes -p <name> gateway status` (liveness not tracked here)")
+
+    if IS_WINDOWS:
+        print("gateways   : native lifecycle is POSIX-only — use `docker compose ps`")
+        return 0
+
+    gws = load_gateways(hermes_home)
+    if gws:
+        alive = [p for p, r in gws.items() if pid_alive(r.get("pid", -1))]
+        dead = [p for p in gws if p not in alive]
+        print(f"gateways   : {len(alive)}/{len(gws)} up"
+              + (f" (up: {', '.join(sorted(alive))})" if alive else "")
+              + (f" — DOWN: {', '.join(sorted(dead))}" if dead else ""))
+    else:
+        print("gateways   : none started via `companyctl up`")
+    return 0
+
+
+# --------------------------------------------------------------------------- #
+# Gateway lifecycle (native install path; the Docker path uses compose)
+#
+# `up` launches detached gateways and records their pids. It deliberately does
+# NOT act as a supervisor — a CLI cannot restart anything after it exits.
+# For real auto-restart, `service` emits systemd/launchd units; the Docker path
+# gets it from `restart: unless-stopped`.
+# --------------------------------------------------------------------------- #
+IS_WINDOWS = os.name == "nt"
+
+# Why the native lifecycle is POSIX-only, deliberately:
+#   os.kill(pid, 0) — the liveness probe — is documented on Windows as
+#   "unconditionally killed by the TerminateProcess API", so a status refresh
+#   would kill the very gateways it inspects. signal.SIGKILL does not exist
+#   there, start_new_session is ignored, `tail -f` is absent, and there is no
+#   Windows unit for `service` to emit. Rather than ship a half-working
+#   supervisor with a destructive probe, Windows is routed to the Docker path
+#   (docker compose up -d), which supervises properly via restart policies.
+WINDOWS_LIFECYCLE_MSG = (
+    "ERROR: the native gateway lifecycle is POSIX-only (macOS/Linux).\n"
+    "       On Windows use the Docker path instead:  docker compose up -d\n"
+    "       See ORCHESTRATION.md §A."
+)
+
+
+def require_posix_lifecycle() -> None:
+    if IS_WINDOWS:
+        raise SystemExit(WINDOWS_LIFECYCLE_MSG)
+
+
+def hermes_bin() -> str:
+    return os.environ.get("HERMES_BIN", "hermes")
+
+
+def gateways_path(hermes_home: Path) -> Path:
+    return state_dir(hermes_home) / "gateways.json"
+
+
+def log_path(hermes_home: Path, profile: str) -> Path:
+    return state_dir(hermes_home) / "logs" / f"{profile}.log"
+
+
+def load_gateways(hermes_home: Path) -> dict:
+    p = gateways_path(hermes_home)
+    if not p.is_file():
+        return {}
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        raise SystemExit(f"ERROR: corrupt gateway state at {p} — delete it and re-run `up`.")
+
+
+def save_gateways(hermes_home: Path, data: dict) -> None:
+    state_dir(hermes_home).mkdir(parents=True, exist_ok=True)
+    gateways_path(hermes_home).write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+
+def _is_zombie(pid: int) -> bool:
+    """A gateway whose parent (this CLI) already exited stays as an unreaped
+    zombie in containers without a reaping init. os.kill(pid, 0) succeeds on a
+    zombie, so liveness must exclude it explicitly."""
+    stat = Path(f"/proc/{pid}/stat")
+    if stat.is_file():  # Linux
+        try:
+            # state is the field after the (possibly space-containing) comm
+            return stat.read_text(encoding="utf-8").rpartition(")")[2].split()[0] == "Z"
+        except (OSError, IndexError):
+            return False
+    try:  # macOS / BSD
+        out = subprocess.run(["ps", "-o", "state=", "-p", str(pid)],
+                             capture_output=True, text=True, timeout=5)
+        return out.stdout.strip().startswith("Z")
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def pid_alive(pid: int) -> bool:
+    if pid is None or pid < 1:
+        return False
+    if IS_WINDOWS:
+        # NEVER os.kill(pid, 0) here — on Windows that terminates the target.
+        # The native lifecycle is unsupported on Windows anyway; report not-alive
+        # rather than probing destructively.
+        return False
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return not _is_zombie(pid)
+
+
+def selected_profiles(config: dict, only: str | None) -> list[str]:
+    profiles = [r["hermesProfile"] for r in config["roles"]]
+    if only is None:
+        return profiles
+    if only not in profiles:
+        raise SystemExit(f"ERROR: unknown profile '{only}' (have: {', '.join(profiles)})")
+    return [only]
+
+
+def start_gateway(hermes_home: Path, profile: str) -> int:
+    """Spawn a detached gateway, returning its pid. Output goes to a log file.
+
+    Uses `gateway run`, NOT `gateway start`. Verified against hermes-agent
+    0.19.0, whose own help distinguishes them:
+        run    Run gateway in foreground (recommended for WSL, Docker, Termux)
+        start  Start the installed systemd/launchd background service
+    `start` is a service-control verb — it needs `gateway install` to have run
+    first and returns immediately, so the pid we captured would be a control
+    client, not the gateway. `run` is the process we can actually track."""
+    log = log_path(hermes_home, profile)
+    log.parent.mkdir(parents=True, exist_ok=True)
+    handle = log.open("a", encoding="utf-8")
+    handle.write(f"\n==== companyctl up {datetime.datetime.now().isoformat(timespec='seconds')} ====\n")
+    handle.flush()
+    env = dict(os.environ, HERMES_HOME=str(hermes_home))
+    proc = subprocess.Popen(
+        [hermes_bin(), "-p", profile, "gateway", "run"],
+        stdout=handle,
+        stderr=subprocess.STDOUT,
+        stdin=subprocess.DEVNULL,
+        start_new_session=True,  # survives this CLI exiting
+        env=env,
+    )
+    handle.close()
+    return proc.pid
+
+
+def cmd_up(args: argparse.Namespace) -> int:
+    require_posix_lifecycle()
+    config = load_valid_config(Path(args.config))
+    hermes_home = resolve_hermes_home(args)
+    if shutil.which(hermes_bin()) is None:
+        print(f"ERROR: '{hermes_bin()}' not found on PATH. Install Hermes, or set HERMES_BIN.",
+              file=sys.stderr)
+        return 2
+
+    state = load_gateways(hermes_home)
+    started, kept = [], []
+    for profile in selected_profiles(config, args.profile):
+        rec = state.get(profile)
+        if rec and pid_alive(rec.get("pid", -1)):
+            kept.append(profile)
+            continue
+        pid = start_gateway(hermes_home, profile)
+        state[profile] = {
+            "pid": pid,
+            "started": datetime.datetime.now().isoformat(timespec="seconds"),
+            "log": str(log_path(hermes_home, profile)),
+        }
+        started.append(f"{profile}({pid})")
+    save_gateways(hermes_home, state)
+
+    if started:
+        print(f"started : {', '.join(started)}")
+    if kept:
+        print(f"running : {', '.join(kept)} (already up)")
+    print(f"logs    : {state_dir(hermes_home) / 'logs'}")
+    print("note    : `up` is not a supervisor — see `companyctl service` for auto-restart.")
+    return 0
+
+
+def stop_pid(pid: int, timeout: float = 10.0) -> str:
+    """SIGTERM, then SIGKILL if it lingers. Returns what happened."""
+    if not pid_alive(pid):
+        return "already stopped"
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except ProcessLookupError:
+        return "already stopped"
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if not pid_alive(pid):
+            return "stopped"
+        time.sleep(0.2)
+    try:
+        os.kill(pid, signal.SIGKILL)
+    except ProcessLookupError:
+        return "stopped"
+    return "killed (did not exit on SIGTERM)"
+
+
+def cmd_down(args: argparse.Namespace) -> int:
+    require_posix_lifecycle()
+    config = load_valid_config(Path(args.config))
+    hermes_home = resolve_hermes_home(args)
+    state = load_gateways(hermes_home)
+    if not state:
+        print("no gateways recorded (nothing started by `companyctl up`).")
+        return 0
+
+    for profile in selected_profiles(config, args.profile):
+        rec = state.get(profile)
+        if not rec:
+            print(f"  {profile}: not recorded")
+            continue
+        print(f"  {profile}: {stop_pid(rec['pid'])}")
+        state.pop(profile, None)
+    save_gateways(hermes_home, state)
+    return 0
+
+
+def cmd_restart(args: argparse.Namespace) -> int:
+    require_posix_lifecycle()
+    rc = cmd_down(args)
+    if rc != 0:
+        return rc
+    return cmd_up(args)
+
+
+def cmd_logs(args: argparse.Namespace) -> int:
+    require_posix_lifecycle()
+    config = load_valid_config(Path(args.config))
+    hermes_home = resolve_hermes_home(args)
+    profiles = selected_profiles(config, args.profile)
+    if len(profiles) > 1:
+        print(f"ERROR: pick one profile with --profile (have: {', '.join(profiles)})", file=sys.stderr)
+        return 2
+    log = log_path(hermes_home, profiles[0])
+    if not log.is_file():
+        print(f"ERROR: no log at {log} — has `companyctl up` run?", file=sys.stderr)
+        return 2
+    if args.follow:
+        try:
+            subprocess.run(["tail", "-f", "-n", str(args.lines), str(log)], check=False)
+        except KeyboardInterrupt:
+            pass
+        return 0
+    lines = log.read_text(encoding="utf-8", errors="replace").splitlines()
+    print("\n".join(lines[-args.lines:]))
+    return 0
+
+
+def cmd_service(args: argparse.Namespace) -> int:
+    """Register each profile's gateway as a real OS service.
+
+    This delegates to `hermes gateway install`, which upstream already provides
+    per profile — it writes the systemd unit / launchd plist itself, with
+    --start-on-login for boot survival. An earlier version of this command
+    hand-wrote competing units running `gateway start`; that was wrong twice
+    over (it duplicated upstream, and `start` only drives an already-installed
+    service). All this adds is the fan-out across the five profiles."""
+    require_posix_lifecycle()
+    config = load_valid_config(Path(args.config))
+    hermes_home = resolve_hermes_home(args)
+    profiles = selected_profiles(config, args.profile)
+    if shutil.which(hermes_bin()) is None:
+        die(f"ERROR: '{hermes_bin()}' not found on PATH. Install Hermes, or set HERMES_BIN.")
+
+    env = dict(os.environ, HERMES_HOME=str(hermes_home))
+    cmds = [
+        [hermes_bin(), "-p", p, "gateway", "install"]
+        + (["--start-now"] if args.start_now else ["--no-start-now"])
+        + (["--start-on-login"] if args.start_on_login else [])
+        for p in profiles
+    ]
+
+    if not args.apply:
+        print("(dry-run) would run, one per profile:\n")
+        for c in cmds:
+            print("  " + " ".join(c))
+        print("\nRe-run with --apply to install. Uninstall with:")
+        print(f"  {hermes_bin()} -p <profile> gateway uninstall")
+        return 0
+
+    failed = []
+    for profile, cmd in zip(profiles, cmds):
+        print(f"-- {profile}: {' '.join(cmd)}")
+        try:
+            rc = subprocess.run(cmd, env=env, timeout=180).returncode
+        except (OSError, subprocess.SubprocessError) as exc:
+            print(f"   ERROR: {exc}", file=sys.stderr)
+            failed.append(profile)
+            continue
+        if rc != 0:
+            failed.append(profile)
+    if failed:
+        print(f"\nFAILED for: {', '.join(failed)}", file=sys.stderr)
+        return 1
+    print(f"\nInstalled {len(profiles)} gateway service(s). Check with:")
+    print(f"  {hermes_bin()} gateway list")
     return 0
 
 
@@ -1218,6 +1530,37 @@ def build_parser() -> argparse.ArgumentParser:
     p_stat = sub.add_parser("status", help="one-screen summary of profiles/map/decisions")
     _add_hermes_home(p_stat)
     p_stat.set_defaults(func=cmd_status)
+
+    p_up = sub.add_parser("up", help="start every profile's Hermes gateway (detached)")
+    p_up.add_argument("--profile", help="only this profile (default: all)")
+    _add_hermes_home(p_up)
+    p_up.set_defaults(func=cmd_up)
+
+    p_down = sub.add_parser("down", help="stop the gateways started by `up`")
+    p_down.add_argument("--profile", help="only this profile (default: all)")
+    _add_hermes_home(p_down)
+    p_down.set_defaults(func=cmd_down)
+
+    p_re = sub.add_parser("restart", help="down + up")
+    p_re.add_argument("--profile", help="only this profile (default: all)")
+    _add_hermes_home(p_re)
+    p_re.set_defaults(func=cmd_restart)
+
+    p_log = sub.add_parser("logs", help="show a gateway's log")
+    p_log.add_argument("--profile", required=True, help="which profile's log")
+    p_log.add_argument("-n", "--lines", type=int, default=40, help="lines to show (default: 40)")
+    p_log.add_argument("-f", "--follow", action="store_true", help="follow the log")
+    _add_hermes_home(p_log)
+    p_log.set_defaults(func=cmd_logs)
+
+    p_svc = sub.add_parser("service",
+                           help="register each profile's gateway via `hermes gateway install`")
+    p_svc.add_argument("--profile", help="only this profile (default: all)")
+    p_svc.add_argument("--apply", action="store_true", help="actually install (default: dry-run)")
+    p_svc.add_argument("--start-now", action="store_true", help="start each service after installing")
+    p_svc.add_argument("--start-on-login", action="store_true", help="survive reboot")
+    _add_hermes_home(p_svc)
+    p_svc.set_defaults(func=cmd_service)
 
     return parser
 

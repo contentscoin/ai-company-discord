@@ -40,6 +40,7 @@ v0.1.0(문서 + 최소 스캐폴드)을 **실제 운영 가능한 컨트롤룸**
 | 예산·비용 추적 | — | ✅ 에이전트/모델별 | 위임 |
 | 승인 게이트·감사 로그 | — | ✅ | 위임 + `#approvals` 채널로 표면화 |
 | 회의 오케스트레이션 (Council·War Room·standup 프로토콜) | — | — | ✅ **고유 가치** |
+| 게이트웨이 기동·감시·서비스 등록 | ✅ `gateway run`/`install`/`list`/`status` — **프로필별로 이미 제공** | 자기 프로세스만 | 5개 팬아웃만 (§3.2) |
 | 멘션·cascade 규칙, cross-family Critic 관례 | — | — | ✅ **고유 가치** |
 | 역할↔모델 라우팅 규범 (GJC 매핑) | 모델 스위칭만 | 비용 추적만 | ✅ **고유 가치** |
 | 지식 정제 파이프라인 (OpenCrab ingest 규범) | — | — | ✅ **고유 가치** |
@@ -49,6 +50,50 @@ v0.1.0(문서 + 최소 스캐폴드)을 **실제 운영 가능한 컨트롤룸**
 - **Standup cron (Phase 2.3)**: Hermes **내장 cron 스케줄러가 1급 경로** — 이 레포는 프롬프트·설정 템플릿만 제공. `companyctl standup post`(REST 게시)는 Hermes cron을 쓸 수 없는 환경의 fallback으로만
 - **결정 로그 (Phase 3.4)**: 감사 추적의 진실원천은 Paperclip. 로컬 `decisions.ndjson`은 **Paperclip 미가동/오프라인에서도 `#briefs` 다이제스트를 뽑기 위한 경량 미러**로만 정당화
 - **비용 (Phase 4.2)**: Paperclip 예산·비용 추적이 정답. `COSTS.md`는 **Paperclip 미사용자를 위한 최소 안내**로 한정 — 자체 추적 로직을 만들지 않음
+
+### 3.1 경계선 수정 — 생명주기는 위임 대상이 아니었다
+
+초판의 이 절은 경계를 **한 칸 보수적으로** 그었습니다. cron을 Hermes에, 태스크·비용을 Paperclip에 위임한 것은 옳았지만(확인: Hermes에 내장 cron 스케줄러가 있고 Paperclip은 `:3100`에 API를 띄움), **기동·감시·정지까지 암묵적으로 "사용자 손"에 넘겨** 버렸습니다.
+
+문제는 그 일을 업스트림 누구도 하지 않는다는 것입니다. Hermes는 게이트웨이 **1개**를 실행하고, Paperclip은 자기 프로세스만 압니다. 5-프로필 회사를 한 번에 켜고, 죽은 게이트웨이를 알아채고, 다시 세우는 일은 **이 레포의 몫**입니다. 그 결과 v0.5.0까지도 README는 터미널 5개에 `hermes -p … gateway start`를 치라고 안내했고, 게이트웨이가 죽어도 아무도 되살리지 않았으며, 업스트림 버전은 고정되지 않았습니다.
+
+수정된 경계 — **"포크 금지"와 "생명주기 위임"은 다른 얘기입니다**:
+
+| 오해 | 실제 |
+|------|------|
+| 업스트림을 건드리지 않는다 = 소스를 복사하지 않는다 | ✅ 유지 (Phase 5도 벤더링하지 않음) |
+| 업스트림을 건드리지 않는다 = 실행도 사용자 몫 | ❌ 폐기 — 조합·기동·감시는 이 레포 책임 |
+
+참고로 **Hermes·Paperclip 모두 MIT**라 벤더링이 법적으로는 가능합니다. 그럼에도 하지 않는 이유는 라이선스가 아니라 **유지보수**입니다: 활발히 개발되는 코드베이스 두 개를 떠안으면 업그레이드가 머지 충돌이 되고, 낡은 업스트림을 배포하게 됩니다. 대신 **핀된 ref에서 빌드**해 업그레이드를 한 줄 변경으로 유지합니다.
+
+### 3.2 재수정 — Hermes는 생명주기를 이미 갖고 있었다
+
+§3.1에서 저는 경계를 한 칸 되돌리며 *"업스트림 누구도 5-프로필 회사의 생명주기를 책임지지 않는다"* 고 적었습니다. **그것도 틀렸습니다.** hermes-agent 0.19.0을 실제로 설치해 측정한 결과([RUNTIME-CONTRACT.md](./RUNTIME-CONTRACT.md)):
+
+| 실측 | 의미 |
+|------|------|
+| `gateway run` — *foreground*, `gateway start` — *installed 서비스 기동* | Phase 5의 `up`이 **틀린 명령**을 쓰고 있었음 (`start`) |
+| `gateway install` — systemd/launchd 유닛을 **업스트림이 직접 작성**, `--start-on-login` 포함 | `companyctl service`의 자체 유닛은 **중복이자 경쟁** |
+| `gateway list` — 5개 프로필 전부 인식 | 멀티 프로필은 업스트림 1급 개념 |
+
+수정 후 `companyctl up`이 기록한 PID 5개가 `hermes gateway list`가 보고한 PID와 완전히 일치합니다.
+
+**교훈**: 두 번 다 경계를 문서와 추론으로 그으려다 틀렸습니다. **런타임을 설치해 한 번 실행해보는 것**이 두 라운드의 추측보다 정확했습니다. 이 레포에 남는 몫은 5개 프로필 팬아웃과 그 위의 Discord·회의·지식 계층입니다.
+
+### Phase 5 — 오케스트레이션 (총 M) — ✅ 구현됨
+
+목표: "회사를 켠다"는 단일 명령. 벤더링 없이 조합·생명주기·버전 핀만 소유.
+
+| # | 산출물 | 파일 | 노력 |
+|---|--------|------|------|
+| 5.1 | `docker-compose.yml` — 게이트웨이 5(프로필별 볼륨·토큰 파일 분리, `restart: unless-stopped`) + Paperclip(`127.0.0.1:3100` 루프백 전용). 업스트림은 **핀된 git ref에서 빌드**, 소스 복사 없음 | `docker-compose.yml` · `.env.example` · `secrets/*.env.example` | M |
+| 5.2 | `companyctl up/down/restart/logs` — 네이티브 경로. detached 기동·PID 추적·이미 뜬 것은 건드리지 않음·프로필 단위 조작 | `scripts/companyctl.py` | M |
+| 5.3 | `companyctl service` — **`hermes gateway install` 팬아웃**(초판은 자체 유닛을 작성했으나 §3.2에서 중복으로 판명) | `scripts/companyctl.py` | S |
+| 5.4 | `status`에 게이트웨이 생존 집계 편입 — **좀비 프로세스를 살아있다고 세지 않음** | `scripts/companyctl.py` | S |
+| 5.5 | `ORCHESTRATION.md` — 두 경로 대조표·업그레이드 절차·미검증 항목 명시 | `ORCHESTRATION.md` | S |
+
+의존성: Phase 1(역할 목록), Phase 4(status).
+**DoD**: `docker compose config` 통과 + 버전 핀이 빌드 context에 반영 · `up` 2회차는 재기동 없음 · 게이트웨이 강제 종료 시 `status`가 DOWN으로 검출하고 `up`이 그것만 재기동 · `down` 후 잔여 프로세스 없음.
 
 ## 4. 아키텍처
 

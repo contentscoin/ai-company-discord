@@ -67,14 +67,12 @@ python3 scripts/companyctl.py bootstrap --guild <server-id>           # preview
 python3 scripts/companyctl.py bootstrap --guild <server-id> --apply   # create
 ```
 
-4. Start gateways:
+4. Bring the company up — Docker, or natively (see [ORCHESTRATION.md](./ORCHESTRATION.md)):
 
 ```bash
-hermes -p ceo gateway start
-hermes -p cto gateway start
-hermes -p loop gateway start
-hermes -p growth gateway start
-hermes -p critic gateway start
+docker compose up -d                     # 5 gateways + Paperclip, auto-restarting
+# or, on a native Hermes install:
+python3 scripts/companyctl.py up         # starts every profile's gateway
 ```
 
 5. Health-check, then smoke-test in `#exec-meeting`: `@CEO @CTO 주간회의 테스트`
@@ -100,7 +98,10 @@ One dependency-free CLI (Python 3 stdlib) driven by `templates/company.discord.j
 | `lint` | Scan text for secrets/PII before OpenCrab ingest |
 | `digest` | Render a weekly brief from the decision log |
 | `archive` | Export a meeting thread to sanitized local minutes |
-| `status` | One-screen summary of profiles, channel map, and decisions |
+| `status` | One-screen summary of profiles, channel map, decisions, and live gateways |
+| `up` / `down` / `restart` | Start, stop, and restart every profile's Hermes gateway |
+| `logs` | Show a gateway's log (`--profile ceo -f`) |
+| `service` | Emit systemd/launchd units so the init system handles auto-restart |
 
 Secrets are read only from the environment or `.env` and are never printed. Runtime state lives under `~/.hermes/ai-company/`, never in this repo.
 
@@ -113,7 +114,8 @@ Secrets are read only from the environment or `.env` and are never printed. Runt
 | [ROUTING.md](./ROUTING.md) | GJC roles ↔ executives ↔ Cursor |
 | [MEETINGS.md](./MEETINGS.md) | Exec meeting / standup protocols |
 | [PROTOCOLS.md](./PROTOCOLS.md) | Machine-readable DECISION / VERDICT / PASS-FAIL specs (PROTOCOL v1) |
-| [ROADMAP.md](./ROADMAP.md) | Enhancement roadmap (phases 1–4, upstream boundaries) |
+| [ORCHESTRATION.md](./ORCHESTRATION.md) | Bring the company up: Docker Compose or native lifecycle |
+| [ROADMAP.md](./ROADMAP.md) | Enhancement roadmap (phases 1–5, upstream boundaries) |
 | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) | Symptom → cause → fix tables |
 | [COSTS.md](./COSTS.md) | Cost visibility for non-Paperclip users (modelHint) |
 | `profiles/*/SOUL.md` | Independent souls |

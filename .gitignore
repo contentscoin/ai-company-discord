@@ -2,6 +2,9 @@
 .env
 **/.env
 !.env.example
+# Compose per-profile token files (secrets/ceo.env, …) — examples only are tracked
+secrets/*.env
+!secrets/*.env.example
 
 # OS / editor
 .DS_Store
