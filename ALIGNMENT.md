@@ -83,7 +83,9 @@
 - DoD: 콘텐츠 1건이 `#growth` 요청 → 초안 → `#approvals` 승인 → 발행 기록까지 왕복
 - **진행 상황**: [GROWTH.md](./GROWTH.md) 작성 완료 — 저쪽 레포의 팀 매뉴얼·OpenCrab 상수·pumasi 설정을 클론에서 직접 읽고 규약을 그 실체에 맞춤. 블록 3종(GROWTH BRIEF / READY TO PUBLISH / PUBLISHED)은 텍스트 규약이고 승인 마감은 기존 DECISION 파서 재사용(새 코드 0줄). 스택의 인간 게이트 8개 중 **게이트 7(발행)만 `#approvals`로 승격**해 이중 승인을 피함. `company.discord.json`에 `growthCenter` 기록(스키마 반영). 남은 것은 DoD 왕복 1회 — 스킬 스택 설치 환경(사용자 로컬)이 필요해 CI로는 불가, GROWTH.md §9 체크리스트로 남김
 
-### 6.4 데스크톱 전략 단일화 — 결정 필요 (Board 게이트)
+### 6.4 데스크톱 전략 단일화 — 결정 필요 (Board 게이트) — **결정 자료 완성**
+
+**진행 상황**: Board 결정 자료 [DESKTOP-DECISION.md](./DESKTOP-DECISION.md) 작성 완료 — 질문 3개(단일화 여부/A vs B/탈락 기획 지위), 자산 실체 비교, 기준별 비교, **A안 조건부 권고**, 결정 무관 즉시 조치 4건, `companyctl decision`으로 마감 가능한 DECISION 블록 템플릿 포함. DESKTOP.md 상단에 "B안 설계서, 결정 전 착수 금지" 지위 배너 추가. 남은 것은 Board의 결정 1회.
 
 [DESKTOP.md](./DESKTOP.md)는 `hermes-ceo-console-installer`(Electron, alpha.27, 이미 Win/mac 산출물 존재)를 모른 채 신규 Python+pywebview 앱을 설계했습니다. 두 자산의 관계를 정해야 합니다:
 
@@ -94,9 +96,11 @@
 
 **어느 쪽이든 즉시 적용되는 발견**: 기존 installer는 Paperclip을 번들하므로 [DESKTOP.md](./DESKTOP.md) BREAK 1의 `embedded-postgres` 제3자 라이선스 리스크(PostgreSQL 18.4 + 라이브러리 8종 고지 의무)가 **그 레포에 오늘 이미 적용**됩니다. 선택과 무관하게 통지 필요.
 
-### 6.5 gbrain 포지션 기록 (S)
+### 6.5 gbrain 포지션 기록 (S) — **완료**
 
 지식 평면은 OpenCrab 유지(이미 social 스택과 공유). gbrain은 **Hermes 프로필의 장기 기억 후보**로 `company.discord.json` references에 기록만 — 채택 결정은 OpenCrab으로 부족해질 때.
+
+**진행 상황**: `knowledge.candidates`에 구조화 기록 완료 (devCenter.frameworks의 candidate 패턴과 동형, 스키마 반영). references에는 이미 있었고, 이제 "왜 안 쓰는지·언제 재검토하는지"가 SSoT에 남음.
 
 ### 제외 확정
 
