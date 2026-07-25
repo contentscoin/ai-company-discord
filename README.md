@@ -105,6 +105,23 @@ One dependency-free CLI (Python 3 stdlib) driven by `templates/company.discord.j
 
 Secrets are read only from the environment or `.env` and are never printed. Runtime state lives under `~/.hermes/ai-company/`, never in this repo.
 
+### Machine-readable output
+
+`validate`, `doctor`, `lint`, and `status` accept `--json`; `decision` always emits JSON. This is a stable contract — scripts and tooling bind to it rather than to the human-readable text.
+
+```bash
+python3 scripts/companyctl.py status --json | jq '.gateways.up'
+python3 scripts/companyctl.py lint --json --file notes.md | jq '.findings[].kind'
+```
+
+Exit codes are uniform across both modes:
+
+| Code | Meaning |
+|------|---------|
+| `0` | success — and for the gate commands, nothing to report (`validate` clean, `doctor` no FAIL, `lint` no findings) |
+| `1` | the command ran and found something: validation errors, a doctor FAIL, or a lint finding that blocks ingest |
+| `2` | the command could not run: bad arguments, missing token, unreadable file, unreachable Discord |
+
 ## Docs
 
 | Doc | Contents |

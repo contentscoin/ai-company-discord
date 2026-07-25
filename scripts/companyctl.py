@@ -92,6 +92,16 @@ class DiscordError(Exception):
 # --------------------------------------------------------------------------- #
 # Loading / paths
 # --------------------------------------------------------------------------- #
+EXIT_CANNOT_RUN = 2  # see README "Machine-readable output" for the code contract
+
+
+def die(msg: str) -> "NoReturn":  # noqa: F821 - annotation only
+    """Abort with the documented 'could not run' code. SystemExit(str) would
+    print the message but exit 1, which collides with 'ran and found something'."""
+    print(msg, file=sys.stderr)
+    raise SystemExit(EXIT_CANNOT_RUN)
+
+
 def load_config(path: Path) -> dict:
     with path.open(encoding="utf-8") as fh:
         return json.load(fh)
@@ -119,7 +129,7 @@ def load_map(hermes_home: Path) -> dict | None:
     try:
         return json.loads(mp.read_text(encoding="utf-8"))
     except json.JSONDecodeError:
-        raise SystemExit(f"ERROR: corrupt channel map at {mp} — re-run `companyctl bootstrap`.")
+        die(f"ERROR: corrupt channel map at {mp} — re-run `companyctl bootstrap`.")
 
 
 def read_env_value(env_path: Path, key: str) -> str | None:
@@ -286,15 +296,13 @@ def load_valid_config(config_path: Path) -> dict:
     try:
         config = load_config(config_path)
     except FileNotFoundError:
-        raise SystemExit(f"ERROR: config not found: {config_path}")
+        die(f"ERROR: config not found: {config_path}")
     except json.JSONDecodeError as exc:
-        raise SystemExit(f"ERROR: invalid JSON in {config_path}: {exc}")
+        die(f"ERROR: invalid JSON in {config_path}: {exc}")
     errors = validate(config, REPO_ROOT)
     if errors:
         lines = "\n".join(f"  - {e}" for e in errors)
-        raise SystemExit(
-            f"ERROR: {config_path} is invalid — run `companyctl validate`:\n{lines}"
-        )
+        die(f"ERROR: {config_path} is invalid — run `companyctl validate`:\n{lines}")
     return config
 
 
@@ -310,13 +318,18 @@ def cmd_validate(args: argparse.Namespace) -> int:
         return 2
 
     errors = validate(config, REPO_ROOT)
+    role_count = len(config.get("roles", []))
+    chan_count = len(config.get("discord", {}).get("channels", []))
+    if getattr(args, "json", False):
+        print(json.dumps({"ok": not errors, "config": str(config_path), "errors": errors,
+                          "roles": role_count, "channels": chan_count},
+                         ensure_ascii=False, indent=2))
+        return 1 if errors else 0
     if errors:
         print(f"FAIL: {config_path} ({len(errors)} error(s))")
         for e in errors:
             print(f"  - {e}")
         return 1
-    role_count = len(config.get("roles", []))
-    chan_count = len(config.get("discord", {}).get("channels", []))
     print(f"OK: {config_path} — {role_count} roles, {chan_count} channels")
     return 0
 
@@ -386,7 +399,11 @@ def cmd_scaffold(args: argparse.Namespace) -> int:
 # --------------------------------------------------------------------------- #
 # Discord REST (network; isolated from the pure planners above)
 # --------------------------------------------------------------------------- #
-def discord_request(method: str, path: str, token: str, payload=None, _retries=3):
+DISCORD_TIMEOUT = 15.0  # seconds; without it an unreachable host hangs forever
+
+
+def discord_request(method: str, path: str, token: str, payload=None, _retries=3,
+                    timeout: float = DISCORD_TIMEOUT):
     url = DISCORD_API + path
     data = json.dumps(payload).encode() if payload is not None else None
     req = urllib.request.Request(url, data=data, method=method)
@@ -394,18 +411,20 @@ def discord_request(method: str, path: str, token: str, payload=None, _retries=3
     req.add_header("Content-Type", "application/json")
     req.add_header("User-Agent", "companyctl (ai-company-discord)")
     try:
-        with urllib.request.urlopen(req) as resp:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
             body = resp.read()
             return json.loads(body) if body else None
     except urllib.error.HTTPError as exc:
         if exc.code == 429 and _retries > 0:
             retry_after = float(exc.headers.get("Retry-After", "1"))
             time.sleep(min(retry_after, 10))
-            return discord_request(method, path, token, payload, _retries - 1)
+            return discord_request(method, path, token, payload, _retries - 1, timeout)
         detail = exc.read().decode("utf-8", "replace")[:400]
         raise DiscordError(f"{method} {path} -> HTTP {exc.code}: {detail}") from exc
     except urllib.error.URLError as exc:
         raise DiscordError(f"{method} {path} -> {exc.reason}") from exc
+    except TimeoutError as exc:
+        raise DiscordError(f"{method} {path} -> timed out after {timeout}s") from exc
 
 
 # --------------------------------------------------------------------------- #
@@ -673,11 +692,17 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     if args.online:
         rows += doctor_online(config, hermes_home)
 
-    worst = 0
+    worst = 1 if any(l == "FAIL" for l, _ in rows) else 0
+    if args.json:
+        print(json.dumps(
+            {"ok": not worst,
+             "findings": [{"level": l, "message": m} for l, m in rows],
+             "fail": sum(1 for l, _ in rows if l == "FAIL"),
+             "warn": sum(1 for l, _ in rows if l == "WARN")},
+            ensure_ascii=False, indent=2))
+        return worst
     for level, msg in rows:
         print(f"  {level:4} {msg}")
-        if level == "FAIL":
-            worst = 1
     summary = "FAIL" if worst else "OK"
     print(f"\n{summary}: {sum(1 for l, _ in rows if l == 'FAIL')} fail, "
           f"{sum(1 for l, _ in rows if l == 'WARN')} warn")
@@ -845,7 +870,7 @@ def read_text_input(args: argparse.Namespace) -> str:
         try:
             return Path(args.file).read_text(encoding="utf-8")
         except (FileNotFoundError, PermissionError, IsADirectoryError, UnicodeDecodeError) as exc:
-            raise SystemExit(f"ERROR: cannot read {args.file}: {exc}")
+            die(f"ERROR: cannot read {args.file}: {exc}")
     return sys.stdin.read()
 
 
@@ -868,22 +893,38 @@ def http_post_json(url: str, payload: dict, timeout: float = 5.0):
         return json.loads(body) if body else None
 
 
-def emit_paperclip(entry: dict, base_url: str) -> None:
-    issues = [
+def build_paperclip_issues(entry: dict) -> list[dict]:
+    """Pure. One issue payload per ACTION that carries a task."""
+    return [
         {"title": a["task"][:80], "body": a["task"], "owner": a.get("owner"), "due": a.get("due")}
         for a in entry["actions"]
         if a.get("task")
     ]
+
+
+def emit_paperclip(entry: dict, base_url: str) -> dict:
+    """Create an issue per ACTION. Returns a result the caller renders — the
+    degraded payload is returned, not printed, so a GUI can offer a copy button."""
+    issues = build_paperclip_issues(entry)
     if not issues:
-        print("(no ACTIONS to turn into Paperclip issues)")
-        return
+        return {"status": "no-actions", "issues": []}
     try:
         for iss in issues:
             http_post_json(base_url.rstrip("/") + "/issues", iss)
-        print(f"Created {len(issues)} Paperclip issue(s) at {base_url}.")
+        return {"status": "created", "count": len(issues), "url": base_url, "issues": issues}
     except (urllib.error.URLError, OSError) as exc:
-        print(f"Paperclip not reachable ({exc}); emitting issue payloads instead:")
-        print(json.dumps(issues, ensure_ascii=False, indent=2))
+        return {"status": "unreachable", "error": str(exc), "issues": issues}
+
+
+def render_paperclip_result(result: dict) -> str:
+    if result["status"] == "no-actions":
+        return "(no ACTIONS to turn into Paperclip issues)"
+    if result["status"] == "created":
+        return f"Created {result['count']} Paperclip issue(s) at {result['url']}."
+    return (
+        f"Paperclip not reachable ({result['error']}); emitting issue payloads instead:\n"
+        + json.dumps(result["issues"], ensure_ascii=False, indent=2)
+    )
 
 
 def cmd_decision(args: argparse.Namespace) -> int:
@@ -904,7 +945,7 @@ def cmd_decision(args: argparse.Namespace) -> int:
         "actions": parsed["actions"],
     }
     if args.to_paperclip:
-        emit_paperclip(entry, args.paperclip_url)
+        print(render_paperclip_result(emit_paperclip(entry, args.paperclip_url)))
     print(json.dumps(entry, ensure_ascii=False, indent=2))
     if not args.dry_run:
         log = append_decision_log(resolve_hermes_home(args), entry)
@@ -944,6 +985,12 @@ def scan_for_sensitive(text: str) -> list[tuple[str, int, str]]:
 
 def cmd_lint(args: argparse.Namespace) -> int:
     findings = scan_for_sensitive(read_text_input(args))
+    if getattr(args, "json", False):
+        print(json.dumps(
+            {"ok": not findings,
+             "findings": [{"severity": s_, "line": ln, "kind": k} for s_, ln, k in findings]},
+            ensure_ascii=False, indent=2))
+        return 1 if findings else 0
     if not findings:
         print("OK: no sensitive patterns found — safe to stage for OpenCrab ingest")
         return 0
@@ -1124,49 +1171,84 @@ def read_all_decisions(hermes_home: Path) -> list[dict]:
     return out
 
 
-def cmd_status(args: argparse.Namespace) -> int:
-    config = load_valid_config(Path(args.config))
-    hermes_home = resolve_hermes_home(args)
+def status_report(config: dict, hermes_home: Path) -> dict:
+    """Everything `status` knows, as data. The renderer below is the only part
+    that prints, so a script or UI can consume this directly."""
     profiles_dir = hermes_home / "profiles"
-
     scaffolded = [r["hermesProfile"] for r in config["roles"]
                   if (profiles_dir / r["hermesProfile"]).is_dir()]
-    print(f"profiles   : {len(scaffolded)}/{len(config['roles'])} scaffolded "
-          f"({', '.join(scaffolded) or 'none'})")
-
     data = load_map(hermes_home)
-    if data:
-        print(f"discord map: guild {data.get('guildId', '?')}, "
-              f"{len(data.get('channels', {}))} channels")
-    else:
-        print("discord map: none (run `companyctl bootstrap`)")
-
     decisions = read_all_decisions(hermes_home)
-    if decisions:
-        last = decisions[-1]
-        print(f"decisions  : {len(decisions)} logged, last {last.get('date', '?')}")
-        for d in decisions[-3:]:
-            first = (d.get("decisions") or ["(none)"])[0]
-            print(f"             · {d.get('date', '?')}: {first}")
-    else:
-        print("decisions  : none logged")
-
     marker = state_dir(hermes_home) / "last_standup.txt"
-    print(f"last standup: {marker.read_text(encoding='utf-8').strip() if marker.is_file() else 'never'}")
+
+    report = {
+        "profiles": {
+            "scaffolded": scaffolded,
+            "total": len(config["roles"]),
+        },
+        "discordMap": None if not data else {
+            "guildId": data.get("guildId"),
+            "channelCount": len(data.get("channels", {})),
+        },
+        "decisions": {
+            "count": len(decisions),
+            "last": decisions[-1].get("date") if decisions else None,
+            "recent": [
+                {"date": d.get("date"), "first": (d.get("decisions") or [None])[0]}
+                for d in decisions[-3:]
+            ],
+        },
+        "lastStandup": marker.read_text(encoding="utf-8").strip() if marker.is_file() else None,
+    }
 
     if IS_WINDOWS:
-        print("gateways   : native lifecycle is POSIX-only — use `docker compose ps`")
-        return 0
-
-    gws = load_gateways(hermes_home)
-    if gws:
-        alive = [p for p, r in gws.items() if pid_alive(r.get("pid", -1))]
-        dead = [p for p in gws if p not in alive]
-        print(f"gateways   : {len(alive)}/{len(gws)} up"
-              + (f" (up: {', '.join(sorted(alive))})" if alive else "")
-              + (f" — DOWN: {', '.join(sorted(dead))}" if dead else ""))
+        report["gateways"] = {"supported": False, "reason": "native lifecycle is POSIX-only"}
     else:
-        print("gateways   : none started via `companyctl up`")
+        gws = load_gateways(hermes_home)
+        alive = sorted(p for p, r in gws.items() if pid_alive(r.get("pid", -1)))
+        report["gateways"] = {
+            "supported": True,
+            "tracked": len(gws),
+            "up": alive,
+            "down": sorted(p for p in gws if p not in alive),
+        }
+    return report
+
+
+def render_status(r: dict) -> str:
+    p = r["profiles"]
+    lines = [f"profiles   : {len(p['scaffolded'])}/{p['total']} scaffolded "
+             f"({', '.join(p['scaffolded']) or 'none'})"]
+
+    m = r["discordMap"]
+    lines.append(f"discord map: guild {m['guildId'] or '?'}, {m['channelCount']} channels"
+                 if m else "discord map: none (run `companyctl bootstrap`)")
+
+    d = r["decisions"]
+    if d["count"]:
+        lines.append(f"decisions  : {d['count']} logged, last {d['last'] or '?'}")
+        lines += [f"             · {x['date'] or '?'}: {x['first'] or '(none)'}" for x in d["recent"]]
+    else:
+        lines.append("decisions  : none logged")
+
+    lines.append(f"last standup: {r['lastStandup'] or 'never'}")
+
+    g = r["gateways"]
+    if not g["supported"]:
+        lines.append("gateways   : native lifecycle is POSIX-only — use `docker compose ps`")
+    elif g["tracked"]:
+        lines.append(f"gateways   : {len(g['up'])}/{g['tracked']} up"
+                     + (f" (up: {', '.join(g['up'])})" if g["up"] else "")
+                     + (f" — DOWN: {', '.join(g['down'])}" if g["down"] else ""))
+    else:
+        lines.append("gateways   : none started via `companyctl up`")
+    return "\n".join(lines)
+
+
+def cmd_status(args: argparse.Namespace) -> int:
+    config = load_valid_config(Path(args.config))
+    report = status_report(config, resolve_hermes_home(args))
+    print(json.dumps(report, ensure_ascii=False, indent=2) if args.json else render_status(report))
     return 0
 
 
@@ -1197,7 +1279,7 @@ WINDOWS_LIFECYCLE_MSG = (
 
 def require_posix_lifecycle() -> None:
     if IS_WINDOWS:
-        raise SystemExit(WINDOWS_LIFECYCLE_MSG)
+        die(WINDOWS_LIFECYCLE_MSG)
 
 
 def hermes_bin() -> str:
@@ -1219,7 +1301,7 @@ def load_gateways(hermes_home: Path) -> dict:
     try:
         return json.loads(p.read_text(encoding="utf-8"))
     except json.JSONDecodeError:
-        raise SystemExit(f"ERROR: corrupt gateway state at {p} — delete it and re-run `up`.")
+        die(f"ERROR: corrupt gateway state at {p} — delete it and re-run `up`.")
 
 
 def save_gateways(hermes_home: Path, data: dict) -> None:
@@ -1268,7 +1350,7 @@ def selected_profiles(config: dict, only: str | None) -> list[str]:
     if only is None:
         return profiles
     if only not in profiles:
-        raise SystemExit(f"ERROR: unknown profile '{only}' (have: {', '.join(profiles)})")
+        die(f"ERROR: unknown profile '{only}' (have: {', '.join(profiles)})")
     return [only]
 
 
@@ -1484,7 +1566,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
-    sub.add_parser("validate", help="check company.discord.json").set_defaults(func=cmd_validate)
+    p_val = sub.add_parser("validate", help="check company.discord.json")
+    p_val.add_argument("--json", action="store_true", help="machine-readable output")
+    p_val.set_defaults(func=cmd_validate)
 
     p_scaffold = sub.add_parser("scaffold", help="create ~/.hermes/profiles/<name>/ from the JSON")
     _add_hermes_home(p_scaffold)
@@ -1498,6 +1582,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_doc = sub.add_parser("doctor", help="health-check profiles, tokens, and config")
     p_doc.add_argument("--online", action="store_true", help="also check tokens/channels via Discord")
+    p_doc.add_argument("--json", action="store_true", help="machine-readable output")
     _add_hermes_home(p_doc)
     p_doc.set_defaults(func=cmd_doctor)
 
@@ -1517,6 +1602,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_lint = sub.add_parser("lint", help="scan text for secrets/PII before OpenCrab ingest")
     p_lint.add_argument("--file", help="read text from a file (default: stdin)")
+    p_lint.add_argument("--json", action="store_true", help="machine-readable output")
     p_lint.set_defaults(func=cmd_lint)
 
     p_dig = sub.add_parser("digest", help="render a weekly brief from the decision log")
@@ -1533,6 +1619,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_arch.set_defaults(func=cmd_archive)
 
     p_stat = sub.add_parser("status", help="one-screen summary of profiles/map/decisions")
+    p_stat.add_argument("--json", action="store_true", help="machine-readable output")
     _add_hermes_home(p_stat)
     p_stat.set_defaults(func=cmd_status)
 
