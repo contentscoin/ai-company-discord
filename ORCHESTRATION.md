@@ -46,6 +46,7 @@ docker compose up -d ceo cto loop growth critic
 
 - **컨테이너 1개 = Hermes 홈 1개 = 프로필 1개 = 봇 토큰 1개.** 같은 토큰을 두 프로필에 쓰면 게이트웨이가 충돌하므로, 볼륨을 분리해 물리적으로 막았습니다
 - **Paperclip 포트는 `127.0.0.1:3100`에만 바인딩**됩니다 — 네트워크에 노출되지 않습니다
+- **Paperclip 컨테이너를 root로 돌리면** embedded-postgres가 `postgres` 시스템 유저로 initdb를 실행하다 권한 오류로 죽습니다 — 데이터 디렉터리 chown 등 실측한 우회는 [PAPERCLIP.md](./PAPERCLIP.md) §1
 - 업스트림은 **핀된 git ref에서 빌드**합니다(`HERMES_REF`). 소스를 이 레포에 복사하지 않으므로 업그레이드가 머지 충돌이 되지 않습니다
 
 ### 4) 업그레이드

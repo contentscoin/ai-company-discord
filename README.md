@@ -135,6 +135,7 @@ Exit codes are uniform across both modes:
 | [MEETINGS.md](./MEETINGS.md) | Exec meeting / standup protocols |
 | [PROTOCOLS.md](./PROTOCOLS.md) | Machine-readable DECISION / VERDICT / PASS-FAIL specs (PROTOCOL v1) |
 | [ORCHESTRATION.md](./ORCHESTRATION.md) | Bring the company up: Docker Compose or native lifecycle |
+| [PAPERCLIP.md](./PAPERCLIP.md) | Measured Paperclip contract: issues API, built-in adapters, boot pitfalls |
 | [DESKTOP.md](./DESKTOP.md) | Plan for the desktop app and installer (architecture, phases, what breaks) |
 | [ALIGNMENT.md](./ALIGNMENT.md) | Audit against the original brief; Phase 6 plan (Cursor API, adapter, SNS) |
 | [ROADMAP.md](./ROADMAP.md) | Enhancement roadmap (phases 1–5, upstream boundaries) |

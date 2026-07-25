@@ -884,37 +884,82 @@ def append_decision_log(hermes_home: Path, entry: dict) -> Path:
     return log
 
 
-def http_post_json(url: str, payload: dict, timeout: float = 5.0):
+def http_post_json(url: str, payload: dict, timeout: float = 5.0, headers: dict | None = None):
     data = json.dumps(payload).encode()
-    req = urllib.request.Request(
-        url, data=data, method="POST", headers={"Content-Type": "application/json"}
-    )
+    hdrs = {"Content-Type": "application/json"}
+    if headers:
+        hdrs.update(headers)
+    req = urllib.request.Request(url, data=data, method="POST", headers=hdrs)
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         body = resp.read()
         return json.loads(body) if body else None
 
 
-def build_paperclip_issues(entry: dict) -> list[dict]:
-    """Pure. One issue payload per ACTION that carries a task."""
-    return [
-        {"title": a["task"][:80], "body": a["task"], "owner": a.get("owner"), "due": a.get("due")}
-        for a in entry["actions"]
-        if a.get("task")
-    ]
+def paperclip_headers() -> dict:
+    """Bearer auth from PAPERCLIP_API_KEY. Env only — never a flag, never printed."""
+    key = os.environ.get("PAPERCLIP_API_KEY", "").strip()
+    return {"Authorization": f"Bearer {key}"} if key else {}
 
 
-def emit_paperclip(entry: dict, base_url: str) -> dict:
-    """Create an issue per ACTION. Returns a result the caller renders — the
-    degraded payload is returned, not printed, so a GUI can offer a copy button."""
-    issues = build_paperclip_issues(entry)
+def build_agent_map(config: dict) -> dict:
+    """Pure. role id -> paperclipAgentId for roles that declare one."""
+    return {
+        r["id"]: r["paperclipAgentId"]
+        for r in config.get("roles", [])
+        if r.get("paperclipAgentId")
+    }
+
+
+def build_paperclip_issues(entry: dict, agent_map: dict | None = None) -> list[dict]:
+    """Pure. One createIssue payload per ACTION that carries a task.
+    Field names follow the measured create schema (PAPERCLIP.md): title is
+    required; owner/due are not create fields, so they ride in the
+    description; the owner maps to assigneeAgentId only via roles[].paperclipAgentId."""
+    agent_map = agent_map or {}
+    issues = []
+    for a in entry["actions"]:
+        if not a.get("task"):
+            continue
+        desc = [a["task"]]
+        if a.get("owner"):
+            desc.append(f"OWNER: {a['owner']}")
+        if a.get("due"):
+            desc.append(f"DUE: {a['due']}")
+        issue = {
+            "title": a["task"][:80],
+            "description": "\n".join(desc),
+            "priority": "medium",
+        }
+        agent_id = agent_map.get(a.get("owner") or "")
+        if agent_id:
+            issue["assigneeAgentId"] = agent_id
+        issues.append(issue)
+    return issues
+
+
+def emit_paperclip(entry: dict, base_url: str, company_id: str | None,
+                   agent_map: dict | None = None) -> dict:
+    """Create an issue per ACTION via POST {base}/api/companies/{id}/issues.
+    Returns a result the caller renders — the degraded payload is returned,
+    not printed, so a GUI can offer a copy button."""
+    issues = build_paperclip_issues(entry, agent_map)
     if not issues:
         return {"status": "no-actions", "issues": []}
+    if not company_id:
+        return {"status": "no-company", "issues": issues}
+    url = f"{base_url.rstrip('/')}/api/companies/{company_id}/issues"
+    created = 0
     try:
         for iss in issues:
-            http_post_json(base_url.rstrip("/") + "/issues", iss)
-        return {"status": "created", "count": len(issues), "url": base_url, "issues": issues}
+            http_post_json(url, iss, headers=paperclip_headers())
+            created += 1
+        return {"status": "created", "count": created, "url": url, "issues": issues}
+    except urllib.error.HTTPError as exc:
+        return {"status": "http-error", "code": exc.code, "url": url,
+                "created": created, "issues": issues[created:]}
     except (urllib.error.URLError, OSError) as exc:
-        return {"status": "unreachable", "error": str(exc), "issues": issues}
+        return {"status": "unreachable", "error": str(exc),
+                "created": created, "issues": issues[created:]}
 
 
 def render_paperclip_result(result: dict) -> str:
@@ -922,10 +967,22 @@ def render_paperclip_result(result: dict) -> str:
         return "(no ACTIONS to turn into Paperclip issues)"
     if result["status"] == "created":
         return f"Created {result['count']} Paperclip issue(s) at {result['url']}."
-    return (
-        f"Paperclip not reachable ({result['error']}); emitting issue payloads instead:\n"
-        + json.dumps(result["issues"], ensure_ascii=False, indent=2)
-    )
+    payloads = json.dumps(result["issues"], ensure_ascii=False, indent=2)
+    if result["status"] == "no-company":
+        return ("no Paperclip company id (set PAPERCLIP_COMPANY_ID or --paperclip-company); "
+                "emitting issue payloads instead:\n" + payloads)
+    partial = f" after creating {result['created']}" if result.get("created") else ""
+    if result["status"] == "http-error":
+        if result["code"] in (401, 403):
+            hint = " — check PAPERCLIP_API_KEY"
+        elif result["code"] == 404:
+            hint = " — check the company id and roles[].paperclipAgentId"
+        else:
+            hint = ""
+        return (f"Paperclip rejected the request (HTTP {result['code']}){hint}{partial}; "
+                "emitting the remaining payloads instead:\n" + payloads)
+    return (f"Paperclip not reachable ({result['error']}){partial}; "
+            "emitting the remaining payloads instead:\n" + payloads)
 
 
 def cmd_decision(args: argparse.Namespace) -> int:
@@ -946,7 +1003,10 @@ def cmd_decision(args: argparse.Namespace) -> int:
         "actions": parsed["actions"],
     }
     if args.to_paperclip:
-        print(render_paperclip_result(emit_paperclip(entry, args.paperclip_url)))
+        company_id = (args.paperclip_company
+                      or os.environ.get("PAPERCLIP_COMPANY_ID", "").strip() or None)
+        result = emit_paperclip(entry, args.paperclip_url, company_id, build_agent_map(config))
+        print(render_paperclip_result(result))
     print(json.dumps(entry, ensure_ascii=False, indent=2))
     if not args.dry_run:
         log = append_decision_log(resolve_hermes_home(args), entry)
@@ -2038,6 +2098,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_dec.add_argument("--file", help="read the block from a file (default: stdin)")
     p_dec.add_argument("--to-paperclip", action="store_true", help="create a Paperclip issue per ACTION")
     p_dec.add_argument("--paperclip-url", default="http://127.0.0.1:3100", help="Paperclip base URL")
+    p_dec.add_argument("--paperclip-company", default="",
+                       help="Paperclip company id (default: PAPERCLIP_COMPANY_ID env)")
     p_dec.add_argument("--dry-run", action="store_true", help="parse only; do not append to the decision log")
     _add_hermes_home(p_dec)
     p_dec.set_defaults(func=cmd_decision)

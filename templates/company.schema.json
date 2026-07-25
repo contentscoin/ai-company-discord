@@ -65,7 +65,8 @@
           "runtime": { "type": "string", "minLength": 1 },
           "satellites": { "type": "array", "items": { "type": "string" } },
           "crossFamily": { "type": "boolean" },
-          "modelHint": { "type": "string", "description": "Model/provider hint for cost visibility (see COSTS.md)." }
+          "modelHint": { "type": "string", "description": "Model/provider hint for cost visibility (see COSTS.md)." },
+          "paperclipAgentId": { "type": "string", "description": "Paperclip agent UUID for this role. When set, decision --to-paperclip fills assigneeAgentId on issues owned by this role (see PAPERCLIP.md)." }
         }
       }
     },

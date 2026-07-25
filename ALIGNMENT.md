@@ -55,12 +55,16 @@
 
 원칙은 지금까지와 동일합니다: 재발명 금지, 위임 우선, 실측 우선.
 
-### 6.1 실행 루프 완성 — hermes-paperclip-adapter 채택 (M)
+### 6.1 실행 루프 완성 — hermes_local 어댑터 채택 (M) — **실측 완료, 코드 반영됨**
 
-- compose/네이티브 셋업에 어댑터 등록 절차 추가 (`adapterType: "hermes_local"`, 프로필 1:1)
-- 역할 분담을 문서에 못박기: **회의록→이슈는 이 레포**(`companyctl decision`), **이슈→실행→결과 회수는 어댑터**. 우리가 실행 루프를 자체 구현하지 않음
-- `doctor --online`에 어댑터 등록 여부 점검 추가
-- DoD: Paperclip 이슈 배정 → Hermes가 실행하고 결과·비용이 이슈에 돌아오는 왕복 1회 실측
+실제로 `paperclipai@2026.722.0`을 기동해 측정한 결과 ([PAPERCLIP.md](./PAPERCLIP.md)):
+
+- **어댑터 등록 절차는 불필요** — `hermes_local`/`hermes_gateway`는 npx 배포판에 **내장** (`GET /api/adapters` 실측: 14종 전부 builtin·loaded). hermes-paperclip-adapter README의 `registry.ts` 편집은 소스 체크아웃 전용
+- `companyctl decision --to-paperclip`이 가짜 API(`POST /issues` + `body/owner/due` 필드)를 쓰고 있었음을 실측으로 확인 — 실제 경로 `POST /api/companies/{id}/issues`로 수정, 페이로드를 측정된 스키마(`title/description/priority/assigneeAgentId`)로 교체. 스키마가 비엄격이라 옛 페이로드는 **조용히 본문이 유실**되는 빈 이슈를 만들었음
+- `roles[].paperclipAgentId`(선택)로 ACTION owner → 이슈 assignee 매핑. 라이브 왕복: 한국어 DECISION 블록 → `AIC-5`에 hermes_local 에이전트 uuid가 assignee로 기록됨
+- **부수 실측**: Paperclip에 `cursor`(모델 39종)·`cursor_cloud` 어댑터도 내장 — 6.2의 경로 후보가 하나 더 생김 (아래)
+- 남은 DoD: 이슈 배정 → Hermes가 **실행**하고 결과·비용이 이슈로 돌아오는 왕복 (게이트웨이 + LLM 키가 있는 환경에서 1회 실측 필요)
+- 역할 분담(유지): **회의록→이슈는 이 레포**(`companyctl decision`), **이슈→실행→결과 회수는 Paperclip 내장 어댑터**. 우리가 실행 루프를 자체 구현하지 않음
 
 ### 6.2 Cursor Cloud Agents 연동 — CTO 위임의 실체화 (M)
 
@@ -69,6 +73,7 @@
 - 비용 규약: 이 경로의 과금은 **커서 플랜 크레딧**(원질문의 의도 충족). 프로필 대화는 여전히 LLM 키 — [COSTS.md](./COSTS.md)에 이원 구조 명시
 - DoD: 위임 1건이 실제 PR로 돌아오는 왕복 실측
 - **진행 상황**: 도구는 구현됨 — `companyctl verify-cursor`(표면 실측→`CURSOR-CONTRACT.md`)와 `companyctl delegate`(기본 dry-run, `--apply`시에만 크레딧 소모·브랜치 푸시). 단 **이 샌드박스의 이그레스 정책이 `api.cursor.com`을 차단**해 실측은 미완 — 환경 네트워크 정책에서 `api.cursor.com`을 허용하거나 로컬에서 `CURSOR_API_KEY=... companyctl verify-cursor --out CURSOR-CONTRACT.md` 1회 실행 필요
+- **6.1 실측이 연 새 경로**: Paperclip에 `cursor` 어댑터(모델 39종)와 `cursor_cloud` 어댑터가 **내장**되어 있음 ([PAPERCLIP.md](./PAPERCLIP.md) §5). CTO 에이전트를 `adapterType: "cursor"`로 만들면 delegate 없이 Paperclip 자체가 커서로 실행을 위임할 가능성 — 요구사항(cursor-agent CLI? 키? 과금 주체)을 다음 측정 대상으로 추가. `companyctl delegate`는 그와 무관하게 Discord발 수동 위임 경로로 유효
 
 ### 6.3 Growth 실행 계층 — social-ai-team-custom 연동 (M)
 

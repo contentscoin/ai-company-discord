@@ -141,7 +141,7 @@ python3 scripts/companyctl.py doctor --online   # + 토큰 유효성·채널 드
 
 ## 7. Paperclip / OpenCrab (선택)
 
-- Paperclip: 에이전트 adapter를 Hermes profile과 1:1 매핑
+- Paperclip: `npx -y paperclipai onboard --yes` → `hermes_local` 어댑터로 에이전트를 만들어 Hermes profile과 1:1 매핑. 어댑터는 배포판에 **내장**되어 있어 별도 설치가 필요 없습니다. 이슈 자동 등록까지 붙이려면 [PAPERCLIP.md](./PAPERCLIP.md) (실측 계약: 엔드포인트·스키마·함정)
 - OpenCrab: project명 = profile명, ingest는 `workmate-opencrab-ingest`만
 
 ## 8. GJC 번들 (개발 본체)
