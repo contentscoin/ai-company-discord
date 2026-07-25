@@ -14,7 +14,31 @@
     "meetingChannel": { "type": "string" },
     "hotlineChannel": { "type": "string" },
     "controlPlane": { "type": "string" },
-    "knowledge": { "type": "object" },
+    "knowledge": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "primary": { "type": "string" },
+        "ingestSkill": { "type": "string" },
+        "profileEqualsProject": { "type": "boolean" },
+        "candidates": {
+          "type": "array",
+          "description": "Knowledge/memory layers considered but not adopted (mirrors devCenter.frameworks candidate pattern).",
+          "items": {
+            "type": "object",
+            "required": ["name"],
+            "additionalProperties": true,
+            "properties": {
+              "name": { "type": "string" },
+              "role": { "type": "string" },
+              "status": { "type": "string", "enum": ["candidate", "adopted", "deprecated"] },
+              "ref": { "type": "string" },
+              "note": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
     "devCenter": {
       "type": "object",
       "additionalProperties": true,

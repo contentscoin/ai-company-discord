@@ -1,7 +1,7 @@
 {
   "$schema": "./company.schema.json",
   "name": "solo-founder-discord",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "protocolVersion": "1",
   "meetingChannel": "discord",
   "hotlineChannel": "telegram-dm-optional",
@@ -9,7 +9,16 @@
   "knowledge": {
     "primary": "opencrab",
     "ingestSkill": "workmate-opencrab-ingest",
-    "profileEqualsProject": true
+    "profileEqualsProject": true,
+    "candidates": [
+      {
+        "name": "gbrain",
+        "role": "hermes-profile-long-term-memory",
+        "status": "candidate",
+        "ref": "https://github.com/garrytan/gbrain",
+        "note": "Knowledge/memory layer designed for Hermes (hybrid search + knowledge graph + agent memory, 30+ MCP tools). Recorded per ALIGNMENT 6.5 — knowledge plane stays OpenCrab (shared with the Growth stack); revisit only if OpenCrab proves insufficient."
+      }
+    ]
   },
   "devCenter": {
     "primary": "cursor",
