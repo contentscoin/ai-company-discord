@@ -377,6 +377,7 @@ class LifecycleTests(unittest.TestCase):
         with mock.patch.object(companyctl, "IS_WINDOWS", False):
             companyctl.require_posix_lifecycle()  # must not raise
 
+    @unittest.skipIf(companyctl.IS_WINDOWS, "zombies are a POSIX concept; lifecycle is POSIX-only")
     def test_zombie_is_not_alive(self):
         """A gateway whose parent exited lingers as an unreaped zombie; status
         must not count it as up."""
