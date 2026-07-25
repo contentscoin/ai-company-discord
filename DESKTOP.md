@@ -1,10 +1,10 @@
 # 데스크톱 앱 고도화 기획 — 설치 파일까지
 
-> **지위 (Phase 6.4)**: 이 문서는 조직에 이미 존재하는 `hermes-ceo-console-installer`(Electron,
-> alpha.27)를 모른 채 작성된 **B안 설계서**입니다. A/B 단일화는 Board 결정 대기 —
-> 결정 자료와 권고(A안)는 [DESKTOP-DECISION.md](./DESKTOP-DECISION.md). **결정 전에는 이 문서의
-> 로드맵에 착수하지 않습니다.** 스택 무관 자산(감시자 금지·신원 5종 체크·시크릿 규칙·Phase 0
-> 실측)은 어느 결정에서도 유효합니다.
+> **지위 (Phase 6.4 — 결정됨)**: Board가 2026-07-25 **이 문서를 유효한 로드맵으로 채택**했습니다
+> (B안 — [DESKTOP-DECISION.md](./DESKTOP-DECISION.md) §7). 기존 `hermes-ceo-console-installer`는
+> 제3자 라이선스 NOTICE를 갚은 뒤 아카이브합니다. 채택은 이 문서의 규율까지 포함합니다:
+> **Phase 0(런타임 계약 실측) 전에는 GUI 코드를 한 줄도 쓰지 않습니다.** 후속 순서는
+> DESKTOP-DECISION.md §7의 B-경로 백로그를 따릅니다.
 
 최종 산출물을 **데스크톱 설치 파일**(.dmg / .exe / .AppImage)로 잡았을 때의 아키텍처와 로드맵입니다.
 14개 에이전트 감사·설계·심사·적대적 검증을 거쳤고, **검증한 5개 가정 중 4개가 깨졌습니다.** 그 4개가 이 문서의 뼈대입니다.

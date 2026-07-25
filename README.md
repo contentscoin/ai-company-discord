@@ -139,7 +139,7 @@ Exit codes are uniform across both modes:
 | [PAPERCLIP.md](./PAPERCLIP.md) | Measured Paperclip contract: issues API, built-in adapters, boot pitfalls |
 | [GROWTH.md](./GROWTH.md) | Growth ↔ social-ai-team-custom protocol: brief/publish blocks, gate mapping |
 | [DESKTOP.md](./DESKTOP.md) | Plan for the desktop app and installer (architecture, phases, what breaks) |
-| [DESKTOP-DECISION.md](./DESKTOP-DECISION.md) | Board decision brief: one desktop deliverable — extend the existing installer (A, recommended) vs the new app (B) |
+| [DESKTOP-DECISION.md](./DESKTOP-DECISION.md) | Board decision record: desktop unified on the new Control Room app (B, decided 2026-07-25); installer archived after license NOTICE |
 | [ALIGNMENT.md](./ALIGNMENT.md) | Audit against the original brief; Phase 6 plan (Cursor API, adapter, SNS) |
 | [ROADMAP.md](./ROADMAP.md) | Enhancement roadmap (phases 1–5, upstream boundaries) |
 | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) | Symptom → cause → fix tables |
