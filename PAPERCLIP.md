@@ -74,12 +74,34 @@ python3 scripts/companyctl.py decision --to-paperclip < close-block.txt
 |--------|---------|---------------------|
 | `hermes_local` | 0 (게이트웨이 위임) | **Hermes 프로필 ↔ Paperclip 에이전트 연결의 정답** — 별도 설치 불필요 |
 | `hermes_gateway` | 0 | 원격 게이트웨이 연결용 |
-| `cursor` | **39** | Cursor 로컬 실행 어댑터 — 원질문("커서 요금제로 프로필 작동")의 유력 경로, Phase 6.2에서 실측 예정 |
-| `cursor_cloud` | 0 | Cursor Cloud Agents 위임 |
+| `cursor` | **39** | Cursor CLI(`agent`) 실행 어댑터 — **구독 요금제 과금 경로 실측 확인** (§5.1) |
+| `cursor_cloud` | 0 | Cursor Cloud Agents 위임 — `CURSOR_API_KEY` **필수** (없으면 즉시 `"CURSOR_API_KEY is required for cursor_cloud"` 실측) |
 | `claude_local` / `codex_local` / `gemini_local` / … | 8 / 14 / 8 | 위성 코딩 에이전트 |
 
-- [hermes-paperclip-adapter](https://github.com/NousResearch/hermes-paperclip-adapter) README의 `registry.ts` 수동 등록 절차는 **소스 체크아웃 전용** — npx/npm 배포판에는 이미 내장되어 있어 그대로 쓰면 됩니다 (Phase 6.1 결론).
+- 어댑터들은 `@paperclipai/adapter-*` 패키지로 서버에 **번들**되어 있습니다 — `@paperclipai/hermes-paperclip-adapter`도 그 중 하나. [공식 어댑터 레포](https://github.com/NousResearch/hermes-paperclip-adapter) README의 `registry.ts` 수동 등록 절차는 **소스 체크아웃 전용**이며 npx/npm 배포판에서는 불필요합니다 (Phase 6.1 결론).
 - 외부 어댑터는 `POST /api/adapters/install {packageName, version}`으로 동적 설치 가능 (인스턴스 관리자).
+
+### 5.1 `cursor` 어댑터의 과금 주체 — 원질문의 답 (dist 실측)
+
+`@paperclipai/adapter-cursor-local`의 `execute.js`에서 그대로 읽은 로직:
+
+```js
+function resolveCursorBillingType(env) {
+    return hasNonEmptyEnvValue(env, "CURSOR_API_KEY") || hasNonEmptyEnvValue(env, "OPENAI_API_KEY")
+        ? "api"
+        : "subscription";
+}
+// billingType === "subscription" 이면 biller = "cursor"
+```
+
+| 인증 방법 | billingType | 과금 주체 |
+|-----------|-------------|-----------|
+| `agent login` (Cursor CLI 네이티브 로그인) | `subscription` | **커서 구독 요금제** |
+| `CURSOR_API_KEY` / `OPENAI_API_KEY` env | `api` | API 사용량 과금 |
+
+- 실행은 로컬 **`agent` CLI**를 스폰합니다 (`config.command` 기본값 `"agent"`, `cursor-agent`도 인식). 모델 목록도 `agent models` 출력 파싱 + 패키지 내 폴백 목록(39종)
+- 어댑터 자체 점검 메시지가 두 경로를 명시합니다: *"Set CURSOR_API_KEY in adapter env or run `agent login`."* / *"Cursor is authenticated via `agent login`."*
+- `adapterType: "cursor"` 에이전트 생성은 라이브 확인 (이 샌드박스에는 `agent` CLI가 없어 **실행**은 사용자 환경에서 검증 필요)
 
 에이전트 생성 실측:
 
@@ -90,6 +112,13 @@ curl -X POST http://127.0.0.1:3100/api/companies/$CID/agents \
 # → 201, id(uuid) 반환 — 이 uuid를 roles[].paperclipAgentId에 기입
 ```
 
-## 6. Phase 6.2에 주는 시사점
+## 6. Phase 6.2 결론 — 커서 요금제 경로는 둘, 정답은 어댑터
 
-Paperclip에 `cursor`(모델 39종)·`cursor_cloud` 어댑터가 내장되어 있다는 실측은, 원질문의 답이 `companyctl delegate`(우리가 만든 Cloud Agents 위임)보다 **Paperclip 에이전트를 cursor 어댑터로 만드는 쪽**일 수 있음을 뜻합니다. 다음 측정 대상: cursor 어댑터의 요구사항(cursor-agent CLI? API 키?)과 과금 주체. [ALIGNMENT.md](./ALIGNMENT.md) §Phase 6.2에서 추적.
+§5.1 실측으로 원질문("커서 요금제로 프로필 작동")의 실행 축 답이 확정됐습니다:
+
+| 경로 | 인증 | 과금 | 요구사항 |
+|------|------|------|----------|
+| **Paperclip `cursor` 어댑터** (권장) | `agent login` | **구독 요금제** | Cursor CLI 설치 + 로그인. API 키·이그레스 불필요 |
+| `companyctl delegate` (Cloud Agents) | `CURSOR_API_KEY` | 플랜 크레딧 풀 (API) | `api.cursor.com` 도달 가능해야 함 |
+
+프로필 5개의 **대화**(Hermes 게이트웨이)는 여전히 LLM 키입니다 — 이 경계는 변하지 않습니다 ([COSTS.md](./COSTS.md)). 남은 검증은 사용자 환경 1회: Cursor CLI 로그인 상태에서 `adapterType: "cursor"` 에이전트에 이슈를 배정해 실행·과금이 구독으로 잡히는지 확인. [ALIGNMENT.md](./ALIGNMENT.md) §Phase 6.2에서 추적.
