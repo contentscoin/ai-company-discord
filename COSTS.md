@@ -35,3 +35,14 @@ python3 scripts/companyctl.py doctor   # modelHint 미설정 역할을 WARN
 - 토큰·API 키는 **레포에 넣지 않습니다** (`~/.hermes/profiles/<name>/.env`에만)
 - 실사용/예산 알림·한도는 각 프로바이더 콘솔 또는 Paperclip에서 설정
 - 모델 라우팅 방침은 [ROUTING.md](./ROUTING.md) (GJC `daily` / `coding-sprint` / `cyber-cop`)
+
+## 이원 과금 구조 — 커서 요금제 vs LLM 키
+
+원질문("커서 요금제로 프로필 작동")의 실측 답([ALIGNMENT.md](./ALIGNMENT.md) §1)에 따라 비용은 두 갈래입니다:
+
+| 노동 | 과금 주체 | 도구 |
+|------|-----------|------|
+| CTO의 **코딩 실행** (이슈→구현→PR) | **Cursor 플랜 크레딧** (Cloud Agents API) | `companyctl delegate` |
+| 프로필 5개의 **대화·회의·오케스트레이션** | LLM API 키 (Anthropic/OpenAI/OpenRouter) | Hermes 게이트웨이 |
+
+Cursor 키는 `CURSOR_API_KEY` 환경변수로만 전달합니다. API 표면 실측은 `companyctl verify-cursor` → `CURSOR-CONTRACT.md`.

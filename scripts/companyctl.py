@@ -959,6 +959,7 @@ def cmd_decision(args: argparse.Namespace) -> int:
 # --------------------------------------------------------------------------- #
 SENSITIVE_RULES = [
     ("discord-token", re.compile(r"\b[A-Za-z0-9_-]{24,28}\.[A-Za-z0-9_-]{6}\.[A-Za-z0-9_-]{27,}\b"), "FAIL"),
+    ("cursor-api-key", re.compile(r"\bcrsr_[0-9a-f]{32,}\b"), "FAIL"),
     ("private-key", re.compile(r"-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP )?PRIVATE KEY-----"), "FAIL"),
     ("jwt", re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}"), "FAIL"),
     ("slack-webhook", re.compile(r"hooks\.slack\.com/services/[A-Za-z0-9/]+"), "FAIL"),
@@ -1540,6 +1541,198 @@ def cmd_service(args: argparse.Namespace) -> int:
 
 
 # --------------------------------------------------------------------------- #
+# Cursor Cloud Agents (Phase 6.2) — make the CTO delegation convention real
+#
+# The original brief asked whether the profiles can run on a Cursor plan. The
+# split answer (ALIGNMENT.md §1): conversations cannot — Cursor exposes no
+# general chat-completions API — but the CTO's coding CAN, via the Cloud/
+# Background Agents API, billed against the plan's credit pool.
+#
+# The API docs are unreachable from this sandbox (proxy 403), so like
+# verify-runtime, `verify-cursor` MEASURES the surface instead of trusting
+# prose: it probes candidate endpoints read-only and writes what actually
+# answered into CURSOR-CONTRACT.md. `delegate` then launches an agent — only
+# ever with --apply, because a launch spends plan credits and pushes branches.
+#
+# The key comes from CURSOR_API_KEY only. It is never an argument, never
+# logged, never written to any file.
+# --------------------------------------------------------------------------- #
+CURSOR_API = "https://api.cursor.com"
+CURSOR_TIMEOUT = 20.0
+
+
+def cursor_key() -> str | None:
+    return os.environ.get("CURSOR_API_KEY") or None
+
+
+def cursor_request(method: str, path: str, payload=None,
+                   timeout: float = CURSOR_TIMEOUT) -> tuple[int, object]:
+    """Returns (http_status, parsed_body_or_text). status 0 = network failure.
+    Never raises for HTTP errors — probing expects 401/404s."""
+    key = cursor_key()
+    data = json.dumps(payload).encode() if payload is not None else None
+    req = urllib.request.Request(CURSOR_API + path, data=data, method=method)
+    req.add_header("Authorization", f"Bearer {key}")
+    req.add_header("Content-Type", "application/json")
+    req.add_header("User-Agent", "companyctl (ai-company-discord)")
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            body = resp.read().decode("utf-8", "replace")
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", "replace")
+        try:
+            return exc.code, json.loads(body)
+        except json.JSONDecodeError:
+            return exc.code, body[:500]
+    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        return 0, str(getattr(exc, "reason", exc))[:300]
+    try:
+        return 200, json.loads(body) if body else None
+    except json.JSONDecodeError:
+        return 200, body[:500]
+
+
+# Candidate surface, from the Background Agents API as publicly described.
+# The probe records what ACTUALLY answers; 404s are findings, not errors.
+CURSOR_PROBES = [
+    ("GET", "/v0/me", "API key identity"),
+    ("GET", "/v0/models", "models available to agents"),
+    ("GET", "/v0/repositories", "repos this key may launch agents on"),
+    ("GET", "/v0/agents", "list existing agents"),
+    ("POST", "/v1/chat/completions", "NEGATIVE probe — general LLM API should NOT exist"),
+]
+
+
+def probe_cursor() -> dict:
+    findings = {"reachable": None, "authOk": None, "probes": []}
+    for method, path, why in CURSOR_PROBES:
+        payload = {"model": "probe", "messages": []} if method == "POST" else None
+        status, body = cursor_request(method, path, payload)
+        entry = {"method": method, "path": path, "why": why, "status": status}
+        if isinstance(body, dict):
+            entry["bodyKeys"] = sorted(body.keys())[:12]
+        elif isinstance(body, str) and status == 0:
+            entry["error"] = body
+        findings["probes"].append(entry)
+        if status == 0 and findings["reachable"] is None:
+            findings["reachable"] = False
+        elif status > 0:
+            findings["reachable"] = True
+            if path.startswith("/v0/") and findings["authOk"] is not True:
+                findings["authOk"] = status not in (401, 403)
+    return findings
+
+
+def render_cursor_contract(findings: dict) -> str:
+    lines = [
+        "# CURSOR CONTRACT",
+        "",
+        "`companyctl verify-cursor`가 Cursor API 표면을 실측한 결과입니다.",
+        "공식 문서가 아니라 **응답한 것**을 기록합니다 (verify-runtime과 같은 방법론).",
+        "",
+        f"- 측정일: {findings.get('date', '?')}",
+        f"- 도달 가능: **{findings['reachable']}**",
+        f"- 키 인증: **{findings['authOk']}**",
+        "",
+        "## 프로브 결과",
+        "",
+        "| 엔드포인트 | 상태 | 목적 |",
+        "|-----------|------|------|",
+    ]
+    for p in findings["probes"]:
+        status = p["status"] if p["status"] else "네트워크 실패"
+        lines.append(f"| `{p['method']} {p['path']}` | {status} | {p['why']} |")
+    lines += [
+        "",
+        "## 판정 규칙",
+        "",
+        "- `/v0/*`가 200이면: Cloud Agents API 사용 가능 — `companyctl delegate`로 CTO 위임 실체화",
+        "- `/v1/chat/completions`가 404면: **범용 LLM API 부재가 실측으로 확인** — 프로필 대화는 LLM 키 유지 (ALIGNMENT.md §1)",
+        "- 401/403이면: 키 무효 또는 권한 부족 — 대시보드에서 재발급",
+        "- 전부 네트워크 실패면: 이 환경의 이그레스 정책이 `api.cursor.com`을 차단 — 정책 허용 후 재실행하거나 로컬에서 실행",
+        "",
+        "## 과금",
+        "",
+        "Cloud Agents 사용량은 별도 상품이 아니라 **Cursor 플랜의 크레딧 풀에 과금**됩니다.",
+        "프로필 대화(LLM 키)와의 이원 구조는 [COSTS.md](./COSTS.md) 참조.",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def cmd_verify_cursor(args: argparse.Namespace) -> int:
+    if not cursor_key():
+        die("ERROR: set CURSOR_API_KEY in the environment (dashboard -> Integrations -> API keys).")
+    findings = probe_cursor()
+    findings["date"] = datetime.date.today().isoformat()
+
+    if args.json:
+        print(json.dumps(findings, ensure_ascii=False, indent=2))
+    else:
+        contract = render_cursor_contract(findings)
+        if args.out:
+            Path(args.out).expanduser().write_text(contract, encoding="utf-8")
+            print(f"Wrote {args.out}")
+        else:
+            print(contract)
+
+    if findings["reachable"] is False:
+        print("\napi.cursor.com unreachable from here — egress policy. "
+              "Allow it or run this on your machine.", file=sys.stderr)
+        return 2
+    return 0 if findings.get("authOk") else 1
+
+
+def build_delegate_payload(repo: str, task: str, ref: str, model: str | None,
+                           auto_pr: bool) -> dict:
+    """Pure. The launch payload per the publicly described Agents API shape.
+    verify-cursor's measured contract is the authority if they disagree."""
+    payload = {
+        "prompt": {"text": task},
+        "source": {"repository": repo, "ref": ref},
+        "target": {"autoCreatePr": auto_pr},
+    }
+    if model:
+        payload["model"] = model
+    return payload
+
+
+def cmd_delegate(args: argparse.Namespace) -> int:
+    if not cursor_key():
+        die("ERROR: set CURSOR_API_KEY in the environment.")
+
+    if args.check:
+        status, body = cursor_request("GET", f"/v0/agents/{args.check}")
+        if status == 0:
+            die(f"ERROR: api.cursor.com unreachable ({body})")
+        print(json.dumps(body, ensure_ascii=False, indent=2) if isinstance(body, dict) else body)
+        return 0 if status == 200 else 1
+
+    if not args.repo or not args.task:
+        die("ERROR: --repo and --task are required to launch (or use --check <agent-id>).")
+    payload = build_delegate_payload(args.repo, args.task, args.ref, args.model,
+                                     not args.no_pr)
+    if not args.apply:
+        print("(dry-run) would POST /v0/agents — this SPENDS Cursor plan credits and")
+        print("pushes a branch/PR to the target repo. Re-run with --apply to launch.\n")
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return 0
+
+    status, body = cursor_request("POST", "/v0/agents", payload)
+    if status == 0:
+        die(f"ERROR: api.cursor.com unreachable ({body})")
+    if status not in (200, 201):
+        print(f"ERROR: launch failed (HTTP {status}):", file=sys.stderr)
+        print(json.dumps(body, ensure_ascii=False, indent=2) if isinstance(body, dict) else body,
+              file=sys.stderr)
+        return 1
+    print(json.dumps(body, ensure_ascii=False, indent=2) if isinstance(body, dict) else str(body))
+    if isinstance(body, dict) and body.get("id"):
+        print(f"\ntrack with:  companyctl delegate --check {body['id']}")
+    return 0
+
+
+# --------------------------------------------------------------------------- #
 # verify-runtime — settle the assumptions this project rests on
 #
 # Two things are assumed everywhere and verified nowhere:
@@ -1893,6 +2086,24 @@ def build_parser() -> argparse.ArgumentParser:
     p_log.add_argument("-f", "--follow", action="store_true", help="follow the log")
     _add_hermes_home(p_log)
     p_log.set_defaults(func=cmd_logs)
+
+    p_vc = sub.add_parser("verify-cursor",
+                          help="probe the Cursor Cloud Agents API surface; write CURSOR-CONTRACT.md")
+    p_vc.add_argument("--out", help="write the contract here (default: print)")
+    p_vc.add_argument("--json", action="store_true", help="raw findings instead of the contract")
+    p_vc.set_defaults(func=cmd_verify_cursor)
+
+    p_del = sub.add_parser("delegate",
+                           help="launch a Cursor Cloud Agent on a repo (CTO delegation; spends plan credits)")
+    p_del.add_argument("--repo", help="target repository URL (https://github.com/org/repo)")
+    p_del.add_argument("--task", help="what the agent should do")
+    p_del.add_argument("--ref", default="main", help="branch/ref to start from (default: main)")
+    p_del.add_argument("--model", help="model override (see verify-cursor probe of /v0/models)")
+    p_del.add_argument("--no-pr", action="store_true", help="do not auto-create a PR")
+    p_del.add_argument("--apply", action="store_true",
+                       help="actually launch (default: dry-run; a launch spends credits and pushes branches)")
+    p_del.add_argument("--check", metavar="AGENT_ID", help="fetch status of an existing agent instead")
+    p_del.set_defaults(func=cmd_delegate)
 
     p_ver = sub.add_parser("verify-runtime",
                            help="probe how Hermes actually starts, and write RUNTIME-CONTRACT.md")
