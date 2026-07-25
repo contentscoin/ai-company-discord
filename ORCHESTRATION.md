@@ -10,7 +10,7 @@
 | 정지 | `docker compose down` | `companyctl down` |
 | 로그 | `docker compose logs -f ceo` | `companyctl logs --profile ceo -f` |
 | 상태 | `docker compose ps` | `companyctl status` |
-| **자동 재시작** | ✅ `restart: unless-stopped` | ⚠️ `companyctl service`로 systemd/launchd 등록 필요 |
+| **자동 재시작** | ✅ `restart: unless-stopped` | ✅ `companyctl service --apply` (= `hermes gateway install` 팬아웃) |
 | 격리 | 컨테이너별 볼륨 | `~/.hermes/profiles/<name>/` |
 | 사전 요구 | Docker | Hermes 설치 |
 
@@ -69,21 +69,25 @@ companyctl down
 - PID는 `~/.hermes/ai-company/gateways.json`, 로그는 `~/.hermes/ai-company/logs/<profile>.log` (둘 다 레포 밖)
 - `HERMES_BIN`으로 hermes 실행 파일 경로를 바꿀 수 있습니다
 
-### 자동 재시작은 init에 맡깁니다
+### 자동 재시작은 Hermes 에 맡깁니다
 
-`companyctl up`은 **감시자가 아닙니다** — CLI가 종료된 뒤에는 아무것도 되살릴 수 없습니다. 자체 supervisor를 만드는 대신 OS의 init에 등록합니다:
+`companyctl up`은 **감시자가 아닙니다** — CLI가 종료된 뒤에는 아무것도 되살릴 수 없습니다. 그리고 자체 유닛을 쓸 필요도 없습니다: **Hermes가 이미 프로필별 서비스 등록을 제공합니다**(`gateway install`이 systemd 유닛/launchd plist를 직접 작성).
 
 ```bash
-companyctl service --emit systemd --out ~/.config/systemd/user
-systemctl --user daemon-reload
-systemctl --user enable --now ai-company-hermes-ceo   # 프로필별로
+companyctl service                                  # dry-run: 무엇을 실행할지 출력
+companyctl service --apply --start-now --start-on-login
+hermes gateway list                                 # 등록 결과 확인
+```
 
-# macOS
-companyctl service --emit launchd --out ~/Library/LaunchAgents
-launchctl load ~/Library/LaunchAgents/sh.aicompany.hermes.ceo.plist
+`companyctl service`가 더하는 값은 **5개 프로필 팬아웃**뿐입니다. 해제는 업스트림 명령 그대로:
+
+```bash
+hermes -p ceo gateway uninstall
 ```
 
 `status`의 게이트웨이 집계는 **좀비 프로세스를 살아있다고 세지 않습니다**(부모인 CLI가 이미 종료돼 회수되지 않은 프로세스를 걸러냅니다).
+
+> **`up`은 `hermes gateway run`을 씁니다** — `gateway start`가 아닙니다. `start`는 *이미 설치된* 서비스를 기동시키는 명령이라 PID를 추적할 수 없습니다. 근거는 [RUNTIME-CONTRACT.md](./RUNTIME-CONTRACT.md).
 
 ## C. 이 레포가 하지 않는 일
 
@@ -93,14 +97,23 @@ launchctl load ~/Library/LaunchAgents/sh.aicompany.hermes.ceo.plist
 |---|---|
 | 에이전트 런타임·프로필·cron | Hermes (내장 스케줄러 사용) |
 | 태스크·예산·감사 | Paperclip |
-| **기동·감시·정지** | **이 레포** ← 업스트림 누구도 5-프로필 회사의 생명주기를 책임지지 않음 |
+| 게이트웨이 기동·감시·서비스 등록 | **Hermes** — `gateway run` / `install` / `list` / `status`가 프로필별로 이미 존재 |
+| 5개 프로필 **팬아웃**과 Discord·회의·지식 계층 | **이 레포** |
 
-## D. 아직 검증되지 않은 것
+> 초판에는 *"업스트림 누구도 5-프로필 회사의 생명주기를 책임지지 않는다"* 고 적었습니다. **틀렸습니다.** 실측 결과 `hermes gateway list`는 5개 프로필을 전부 인식하고 `gateway install`은 프로필별 서비스를 직접 등록합니다. 이 레포에 남는 몫은 그 위의 팬아웃뿐입니다 — [RUNTIME-CONTRACT.md](./RUNTIME-CONTRACT.md) §3.
 
-정직하게 남깁니다. 이 환경에는 Docker 데몬이 없어 **이미지 빌드와 실제 기동은 확인하지 못했습니다.**
+## D. 검증 상태
 
-- ✅ 확인됨: compose 스펙 유효(`docker compose config`), 6개 서비스·볼륨 해석, `HERMES_REF` 버전 핀이 빌드 context에 실제 반영
-- ✅ 확인됨: 네이티브 `up`/`down`/`restart`/`logs`/`service` 전 경로 (스텁 게이트웨이로 기동·중복 방지·강제 종료 감지·선택 재기동까지)
-- ⚠️ **미확인: 컨테이너가 프로필을 선택하는 방식.** 업스트림 이미지가 `HERMES_PROFILE` 환경변수를 읽는지 확인하지 못했습니다. 첫 `docker compose up` 때 게이트웨이가 엉뚱한(또는 기본) 프로필로 뜨면, 업스트림 이미지의 실제 진입점 규약에 맞게 각 서비스의 `environment`/`command`를 한 줄 조정해야 합니다
-- ⚠️ 미확인: Paperclip을 `npx`로 컨테이너에서 띄우는 경로(내장 Postgres 초기화 포함)
-- ⚠️ **미확인이자 이 설계의 최대 전제: `hermes -p <profile> gateway start`가 포그라운드 프로세스인가.** 네이티브 경로는 이 명령이 블로킹 프로세스라고 가정하고 PID를 추적합니다. 만약 업스트림에서 이것이 **서비스 제어 명령**(launchd/systemd/schtasks에 등록된 유닛을 기동시키고 즉시 반환)이라면, 기록된 PID는 게이트웨이가 아니라 제어 클라이언트이므로 `status`는 곧바로 DOWN을 보고하고 `up`은 중복 기동을 시도합니다. Hermes 문서 사이트(403)와 raw 문서 경로(404) 모두 접근하지 못해 `gateway install` 서브커맨드의 존재를 확인도 반증도 하지 못했습니다. **실제 Hermes 설치본에서 `hermes gateway --help`를 한 번 실행하면 즉시 판별됩니다** — 그 결과에 따라 네이티브 경로는 PID 추적 대신 업스트림 서비스 유닛에 위임하는 쪽으로 바뀌어야 합니다. 이 확인은 다른 무엇보다 먼저 이뤄져야 합니다
+**[RUNTIME-CONTRACT.md](./RUNTIME-CONTRACT.md)** — 실제 hermes-agent 0.19.0을 설치해 측정한 결과입니다.
+
+- ✅ **측정됨**: `gateway run`이 포그라운드 프로세스이고 `start`는 서비스 제어 명령임. `companyctl up`이 기록한 PID 5개가 `hermes gateway list`가 보고한 PID와 **완전히 일치**
+- ✅ **측정됨**: Hermes가 멀티 프로필 생명주기를 이미 제공(`list`/`install`/`status`)
+- ✅ 확인됨: compose 스펙 유효(`docker compose config`), `HERMES_REF` 버전 핀이 빌드 context에 반영
+- ⚠️ **미측정: 컨테이너의 프로필 선택 방식.** 이 환경에 Docker 데몬이 없습니다. `docker compose up -d` 후 **반드시** `companyctl doctor --online`으로 봇 신원 5종이 서로 다름을 확인하세요 — 초록 컨테이너 5개는 프로필 5개의 증거가 아닙니다
+- ⚠️ 미측정: 실제 Discord 토큰이 들어간 상태의 게이트웨이 동작
+
+재측정:
+
+```bash
+companyctl verify-runtime --out RUNTIME-CONTRACT.md
+```
