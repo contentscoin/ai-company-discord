@@ -366,11 +366,16 @@ class LifecycleTests(unittest.TestCase):
                 killed.assert_not_called()
 
     def test_lifecycle_commands_refuse_to_run_on_windows(self):
+        import io
+        from contextlib import redirect_stderr
         from unittest import mock
+        err = io.StringIO()
         with mock.patch.object(companyctl, "IS_WINDOWS", True):
-            with self.assertRaises(SystemExit) as cm:
+            with redirect_stderr(err), self.assertRaises(SystemExit) as cm:
                 companyctl.require_posix_lifecycle()
-            self.assertIn("docker compose up -d", str(cm.exception))
+        # "could not run" per the documented contract, message on stderr
+        self.assertEqual(cm.exception.code, companyctl.EXIT_CANNOT_RUN)
+        self.assertIn("docker compose up -d", err.getvalue())
 
     def test_lifecycle_allowed_on_posix(self):
         from unittest import mock
@@ -432,6 +437,75 @@ class LifecycleTests(unittest.TestCase):
         self.assertFalse(hasattr(companyctl, "LAUNCHD_PLIST"))
 
 
+class JsonApiTests(unittest.TestCase):
+    """The --json surface is the contract a script or GUI binds to."""
+
+    def test_status_report_is_pure_data(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            (home / "profiles" / "ceo").mkdir(parents=True)
+            cfg = {"roles": [{"id": "ceo", "hermesProfile": "ceo"},
+                             {"id": "cto", "hermesProfile": "cto"}]}
+            r = companyctl.status_report(cfg, home)
+            self.assertEqual(r["profiles"], {"scaffolded": ["ceo"], "total": 2})
+            self.assertIsNone(r["discordMap"])
+            self.assertEqual(r["decisions"]["count"], 0)
+            self.assertIsNone(r["lastStandup"])
+            json.dumps(r)  # must be serializable
+
+    def test_render_status_matches_report(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            (home / "profiles" / "ceo").mkdir(parents=True)
+            cfg = {"roles": [{"id": "ceo", "hermesProfile": "ceo"}]}
+            out = companyctl.render_status(companyctl.status_report(cfg, home))
+            self.assertIn("1/1 scaffolded", out)
+            self.assertIn("run `companyctl bootstrap`", out)
+
+    def test_paperclip_issues_are_built_from_actions(self):
+        entry = {"actions": [
+            {"owner": "cto", "task": "fix the thing", "due": "2026-08-01"},
+            {"owner": "growth", "task": "", "due": None},  # no task -> skipped
+        ]}
+        issues = companyctl.build_paperclip_issues(entry)
+        self.assertEqual(len(issues), 1)
+        self.assertEqual(issues[0]["owner"], "cto")
+        self.assertEqual(issues[0]["due"], "2026-08-01")
+
+    def test_paperclip_unreachable_returns_payload_not_prints(self):
+        entry = {"actions": [{"owner": "cto", "task": "ship it"}]}
+        # port 1 is reliably closed
+        result = companyctl.emit_paperclip(entry, "http://127.0.0.1:1")
+        self.assertEqual(result["status"], "unreachable")
+        self.assertEqual(len(result["issues"]), 1)
+        self.assertIn("emitting issue payloads", companyctl.render_paperclip_result(result))
+
+    def test_paperclip_no_actions(self):
+        result = companyctl.emit_paperclip({"actions": []}, "http://127.0.0.1:1")
+        self.assertEqual(result["status"], "no-actions")
+
+
+class NetworkTimeoutTests(unittest.TestCase):
+    def test_discord_request_passes_a_timeout(self):
+        """Without it an unreachable host hangs the CLI (and would hang a GUI)."""
+        from unittest import mock
+        with mock.patch.object(companyctl.urllib.request, "urlopen") as urlopen:
+            urlopen.return_value.__enter__.return_value.read.return_value = b"{}"
+            companyctl.discord_request("GET", "/users/@me", "tok")
+            _, kwargs = urlopen.call_args
+            self.assertIn("timeout", kwargs)
+            self.assertGreater(kwargs["timeout"], 0)
+
+    def test_discord_timeout_becomes_a_clean_error(self):
+        from unittest import mock
+        with mock.patch.object(companyctl.urllib.request, "urlopen", side_effect=TimeoutError()):
+            with self.assertRaises(companyctl.DiscordError) as cm:
+                companyctl.discord_request("GET", "/users/@me", "tok")
+            self.assertIn("timed out", str(cm.exception))
+
+
 class MapAndInputTests(unittest.TestCase):
     def test_corrupt_map_raises_clean_systemexit(self):
         import tempfile
@@ -447,10 +521,24 @@ class MapAndInputTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             self.assertIsNone(companyctl.load_map(Path(tmp)))
 
-    def test_read_text_input_missing_file_raises_systemexit(self):
+    def test_read_text_input_missing_file_exits_cannot_run(self):
+        import io
+        from contextlib import redirect_stderr
         ns = argparse.Namespace(file="/definitely/not/here.txt")
-        with self.assertRaises(SystemExit):
+        err = io.StringIO()
+        with redirect_stderr(err), self.assertRaises(SystemExit) as cm:
             companyctl.read_text_input(ns)
+        self.assertEqual(cm.exception.code, companyctl.EXIT_CANNOT_RUN)
+        self.assertIn("cannot read", err.getvalue())
+
+    def test_die_uses_the_documented_cannot_run_code(self):
+        import io
+        from contextlib import redirect_stderr
+        err = io.StringIO()
+        with redirect_stderr(err), self.assertRaises(SystemExit) as cm:
+            companyctl.die("ERROR: nope")
+        self.assertEqual(cm.exception.code, 2)
+        self.assertEqual(err.getvalue().strip(), "ERROR: nope")
 
 
 if __name__ == "__main__":
