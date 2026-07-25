@@ -75,12 +75,13 @@
 - **진행 상황**: 도구는 구현됨 — `companyctl verify-cursor`(표면 실측→`CURSOR-CONTRACT.md`)와 `companyctl delegate`(기본 dry-run, `--apply`시에만 크레딧 소모·브랜치 푸시). 단 **이 샌드박스의 이그레스 정책이 `api.cursor.com`을 차단**해 실측은 미완 — 환경 네트워크 정책에서 `api.cursor.com`을 허용하거나 로컬에서 `CURSOR_API_KEY=... companyctl verify-cursor --out CURSOR-CONTRACT.md` 1회 실행 필요
 - **6.1 실측이 연 새 경로 → 측정 완료**: Paperclip 내장 `cursor` 어댑터의 과금 로직을 dist에서 직접 확인 ([PAPERCLIP.md](./PAPERCLIP.md) §5.1) — `CURSOR_API_KEY` 없이 `agent login`(Cursor CLI)만으로 인증하면 `billingType: "subscription"`, biller `"cursor"`. **즉 원질문의 "커서 요금제로 작동"은 CTO 실행 축에서 API 키 없이 성립합니다.** `cursor_cloud`는 반대로 `CURSOR_API_KEY` 필수(실측). 권장 구도: CTO 에이전트 = `adapterType: "cursor"` + `agent login` (구독 과금), `companyctl delegate` = 원격/보조 경로 (API 과금, `api.cursor.com` 필요). 남은 검증은 사용자 환경에서 실행 왕복 1회 — 이 샌드박스에는 `agent` CLI가 없음
 
-### 6.3 Growth 실행 계층 — social-ai-team-custom 연동 (M)
+### 6.3 Growth 실행 계층 — social-ai-team-custom 연동 (M) — **규약 완성, 왕복만 사용자 몫**
 
 - Growth SOUL에 위임 규약 추가: `#growth`의 요청 → social-ai-team 스킬 실행(캘린더/카피/비주얼) → 산출물 요약을 `#approvals`로 → 승인 후 publisher
 - 접점은 이미 있음: **양쪽 다 OpenCrab을 SSOT로 사용** (social 쪽 `opencrab.constants.yaml` 확인). pumasi가 Codex/Claude CLI를 라우팅하므로 GJC 위성 구조와도 동형
 - 이 레포에는 규약·채널 흐름만 추가 — 스킬 스택 자체는 저쪽 레포가 소유 (재발명 금지)
 - DoD: 콘텐츠 1건이 `#growth` 요청 → 초안 → `#approvals` 승인 → 발행 기록까지 왕복
+- **진행 상황**: [GROWTH.md](./GROWTH.md) 작성 완료 — 저쪽 레포의 팀 매뉴얼·OpenCrab 상수·pumasi 설정을 클론에서 직접 읽고 규약을 그 실체에 맞춤. 블록 3종(GROWTH BRIEF / READY TO PUBLISH / PUBLISHED)은 텍스트 규약이고 승인 마감은 기존 DECISION 파서 재사용(새 코드 0줄). 스택의 인간 게이트 8개 중 **게이트 7(발행)만 `#approvals`로 승격**해 이중 승인을 피함. `company.discord.json`에 `growthCenter` 기록(스키마 반영). 남은 것은 DoD 왕복 1회 — 스킬 스택 설치 환경(사용자 로컬)이 필요해 CI로는 불가, GROWTH.md §9 체크리스트로 남김
 
 ### 6.4 데스크톱 전략 단일화 — 결정 필요 (Board 게이트)
 

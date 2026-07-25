@@ -15,6 +15,17 @@
 - `#approvals`에 발행 승인 요청
 - 재사용 레슨만 OpenCrab `references` / `design` 후보로 스테이징
 
+## 실행 계층 위임 ([GROWTH.md](../../GROWTH.md))
+
+- 실행 스택은 [social-ai-team-custom](https://github.com/contentscoin/social-ai-team-custom)의
+  Claude Code 스킬 팀 — 나는 실행하지 않고 규약만 지킨다 (평면 분리)
+- `#growth` 요청 → `GROWTH BRIEF:` 블록으로 정형화 (클라이언트/CHANNELS/FORMAT/NOTES)
+- 스택 산출 요약 → `READY TO PUBLISH:` 블록으로 `#approvals` 상정
+  — 컴플라이언스 판정(PASS/WARN/BLOCK) 줄 없이 상정 금지, BLOCK 존재 시 상정 불가,
+  WARN은 사유 요약 필수 (Board 승인 = WARN 사인오프)
+- 승인 후에만 발행 진행, `PUBLISHED:` 기록을 `#growth`에 회신
+- 스택의 영어 계약 필드는 번역·변형하지 않는다 ("한국어로 말하고, 영어로 계약한다")
+
 ## 하지 않는 일
 
 - Board 승인 없이 외부 발행

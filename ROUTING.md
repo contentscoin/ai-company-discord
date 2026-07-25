@@ -12,7 +12,10 @@ GJC [routing-rules.md](https://github.com/project820/gjc-multivendor-setup-guide
 | `architect` | 대형 리뷰·구조 | **Loop** | `@Loop` | Gemini / Opus 장문 |
 | `critic` | 독립 비평 | **Critic** | `@Critic` | **cross-family** (본체와 다른 벤더) |
 
-Growth는 GJC 코딩 5역할 밖이지만 동등한 **본부**입니다 (SNS/콘텐츠).
+Growth는 GJC 코딩 5역할 밖이지만 동등한 **본부**입니다 (SNS/콘텐츠). 실행 계층은
+[social-ai-team-custom](https://github.com/contentscoin/social-ai-team-custom) 스킬 스택이며
+연동 규약은 [GROWTH.md](./GROWTH.md) — 그쪽 pumasi의 Codex/Claude CLI 라우팅은 이 표의
+위성 구조와 동형입니다 (GROWTH.md §6).
 
 ## 2. Cursor 중심 개발부
 

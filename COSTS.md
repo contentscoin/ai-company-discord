@@ -44,6 +44,7 @@ python3 scripts/companyctl.py doctor   # modelHint 미설정 역할을 WARN
 |------|-----------|------|
 | CTO의 **코딩 실행** — 기본 경로 | **커서 구독 요금제** (`agent login`, 키 불필요 — 실측) | Paperclip `cursor` 어댑터 |
 | CTO의 **코딩 실행** — 원격/보조 | Cursor 플랜 크레딧 (Cloud Agents **API**) | `companyctl delegate` / `cursor_cloud` 어댑터 |
+| Growth의 **콘텐츠 제작 실행** | 구독/OAuth 계열이 기본 — Claude Code 구독(+Codex CLI), 이미지·영상은 ima2 ChatGPT/Grok OAuth(키 불요), 발행은 Blotato 구독. Codex 렌더 레인(`OPENAI_API_KEY`)만 API 과금 | social-ai-team-custom 스킬 스택 ([GROWTH.md](./GROWTH.md) §7) |
 | 프로필 5개의 **대화·회의·오케스트레이션** | LLM API 키 (Anthropic/OpenAI/OpenRouter) | Hermes 게이트웨이 |
 
 주의: `cursor` 어댑터 env에 `CURSOR_API_KEY`나 `OPENAI_API_KEY`를 넣는 순간 과금이 **API로 전환**됩니다(실측된 판정 로직). 구독 과금을 원하면 키를 비우고 `agent login`만 사용하세요. Cursor 키가 필요한 경로에서는 `CURSOR_API_KEY` 환경변수로만 전달합니다. API 표면 실측은 `companyctl verify-cursor` → `CURSOR-CONTRACT.md`.
