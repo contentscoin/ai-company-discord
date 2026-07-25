@@ -68,6 +68,7 @@
 - 2단계: `companyctl delegate --repo <r> --task "<이슈>"` → Cloud Agent 생성 → PR 링크를 `#dev`에 회신하는 최소 루프
 - 비용 규약: 이 경로의 과금은 **커서 플랜 크레딧**(원질문의 의도 충족). 프로필 대화는 여전히 LLM 키 — [COSTS.md](./COSTS.md)에 이원 구조 명시
 - DoD: 위임 1건이 실제 PR로 돌아오는 왕복 실측
+- **진행 상황**: 도구는 구현됨 — `companyctl verify-cursor`(표면 실측→`CURSOR-CONTRACT.md`)와 `companyctl delegate`(기본 dry-run, `--apply`시에만 크레딧 소모·브랜치 푸시). 단 **이 샌드박스의 이그레스 정책이 `api.cursor.com`을 차단**해 실측은 미완 — 환경 네트워크 정책에서 `api.cursor.com`을 허용하거나 로컬에서 `CURSOR_API_KEY=... companyctl verify-cursor --out CURSOR-CONTRACT.md` 1회 실행 필요
 
 ### 6.3 Growth 실행 계층 — social-ai-team-custom 연동 (M)
 

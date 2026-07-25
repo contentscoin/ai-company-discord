@@ -560,6 +560,55 @@ class VerifyRuntimeTests(unittest.TestCase):
                 companyctl.probe_gateway_start_semantics("ceo", Path("/tmp"))["ran"])
 
 
+class CursorTests(unittest.TestCase):
+    """Phase 6.2 — CTO delegation via Cursor Cloud Agents."""
+
+    def test_lint_catches_cursor_api_keys(self):
+        # Assembled at runtime so no key-shaped literal lives in the source.
+        fake = "crsr_" + "0f" * 32
+        kinds = {k for _, _, k in companyctl.scan_for_sensitive(f"key {fake}\n")}
+        self.assertIn("cursor-api-key", kinds)
+        findings = companyctl.scan_for_sensitive(f"key {fake}\n")
+        self.assertFalse(any(fake in str(f) for f in findings))  # value never leaks
+
+    def test_delegate_payload_shape(self):
+        p = companyctl.build_delegate_payload(
+            "https://github.com/o/r", "fix the bug", "main", None, auto_pr=True)
+        self.assertEqual(p["prompt"]["text"], "fix the bug")
+        self.assertEqual(p["source"], {"repository": "https://github.com/o/r", "ref": "main"})
+        self.assertTrue(p["target"]["autoCreatePr"])
+        self.assertNotIn("model", p)
+        p2 = companyctl.build_delegate_payload("u", "t", "dev", "gpt-x", auto_pr=False)
+        self.assertEqual(p2["model"], "gpt-x")
+        self.assertFalse(p2["target"]["autoCreatePr"])
+
+    def test_contract_renders_network_failure_honestly(self):
+        findings = {"date": "2026-07-25", "reachable": False, "authOk": None,
+                    "probes": [{"method": "GET", "path": "/v0/me",
+                                "why": "API key identity", "status": 0, "error": "blocked"}]}
+        out = companyctl.render_cursor_contract(findings)
+        self.assertIn("네트워크 실패", out)
+        self.assertIn("이그레스 정책", out)
+
+    def test_contract_never_contains_the_key(self):
+        key = "crsr_" + "ab" * 32
+        import os as _os
+        from unittest import mock
+        with mock.patch.dict(_os.environ, {"CURSOR_API_KEY": key}):
+            findings = {"date": "d", "reachable": True, "authOk": True, "probes": []}
+            self.assertNotIn(key, companyctl.render_cursor_contract(findings))
+
+    def test_verify_cursor_without_key_is_cannot_run(self):
+        import io, os as _os
+        from contextlib import redirect_stderr
+        from unittest import mock
+        env = {k: v for k, v in _os.environ.items() if k != "CURSOR_API_KEY"}
+        with mock.patch.dict(_os.environ, env, clear=True):
+            with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as cm:
+                companyctl.cmd_verify_cursor(argparse.Namespace(json=False, out=None))
+        self.assertEqual(cm.exception.code, companyctl.EXIT_CANNOT_RUN)
+
+
 class MapAndInputTests(unittest.TestCase):
     def test_corrupt_map_raises_clean_systemexit(self):
         import tempfile

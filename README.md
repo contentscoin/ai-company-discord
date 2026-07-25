@@ -103,6 +103,8 @@ One dependency-free CLI (Python 3 stdlib) driven by `templates/company.discord.j
 | `logs` | Show a gateway's log (`--profile ceo -f`) |
 | `service` | Emit systemd/launchd units so the init system handles auto-restart |
 | `verify-runtime` | Probe how Hermes actually starts and write RUNTIME-CONTRACT.md |
+| `verify-cursor` | Probe the Cursor Cloud Agents API surface; write CURSOR-CONTRACT.md |
+| `delegate` | Launch a Cursor Cloud Agent on a repo (CTO delegation; dry-run by default) |
 
 Secrets are read only from the environment or `.env` and are never printed. Runtime state lives under `~/.hermes/ai-company/`, never in this repo.
 
