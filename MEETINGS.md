@@ -51,6 +51,19 @@ Daily standup — YYYY-MM-DD
 
 `#standup`만 `free_response_channels`에 넣을 수 있음. 그 외 채널은 멘션 필수.
 
+### 스케줄링
+
+**우선 경로 — Hermes 내장 cron.** CEO 프로필이 직접 포스트하게 두면 soul/세션이 루프 안에 남습니다. Hermes 스케줄러 설정으로 위 템플릿을 `meetings.standupCron`(`company.discord.json`, 기본 평일 09:00) 주기로 `#standup`에 게시하세요.
+
+**대체 경로 — companyctl.** 네이티브 스케줄러가 없으면 미리보기/게시 커맨드를 씁니다:
+
+```bash
+python3 scripts/companyctl.py standup post --dry-run   # 메시지 미리보기
+python3 scripts/companyctl.py standup post             # 실제 게시 (CEO 토큰 필요)
+```
+
+crontab 예시는 `templates/cron/crontab.example`. 채널 ID는 `companyctl bootstrap`이 만든 map에서 읽고, 토큰은 `ceo/.env`(또는 `DISCORD_STANDUP_TOKEN`)에서만 읽습니다 — crontab에 시크릿을 넣지 않습니다.
+
 ## C. Dev Sync
 
 **채널:** `#dev`  

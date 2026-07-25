@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/contentscoin/ai-company-discord/templates/company.schema.json",
+  "title": "AI Company Discord — company definition",
+  "description": "Single source of truth consumed by scripts/companyctl.py. Structural contract for editors; companyctl.py performs the same checks plus filesystem cross-validation (stdlib only, no jsonschema dependency). Keep this file in sync with the validator.",
+  "type": "object",
+  "required": ["name", "version", "roles", "discord"],
+  "additionalProperties": true,
+  "properties": {
+    "$schema": { "type": "string" },
+    "name": { "type": "string", "minLength": 1 },
+    "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "protocolVersion": { "type": "string" },
+    "meetingChannel": { "type": "string" },
+    "hotlineChannel": { "type": "string" },
+    "controlPlane": { "type": "string" },
+    "knowledge": { "type": "object" },
+    "devCenter": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "primary": { "type": "string" },
+        "satellites": { "type": "array", "items": { "type": "string" } },
+        "gjcDefaultBundle": { "type": "string" },
+        "frameworks": {
+          "type": "array",
+          "description": "Optional product frameworks the dev agents build with (not orchestration tooling).",
+          "items": {
+            "type": "object",
+            "required": ["name"],
+            "additionalProperties": true,
+            "properties": {
+              "name": { "type": "string" },
+              "kind": { "type": "string" },
+              "status": { "type": "string", "enum": ["candidate", "adopted", "deprecated"] },
+              "ref": { "type": "string" },
+              "note": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "meetings": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "timezone": { "type": "string" },
+        "standupCron": { "type": "string" },
+        "execMeetingCron": { "type": "string" }
+      }
+    },
+    "roles": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "hermesProfile", "discordBot", "runtime"],
+        "additionalProperties": true,
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+          "title": { "type": "string", "minLength": 1 },
+          "hermesProfile": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+          "discordBot": { "type": "string", "minLength": 1 },
+          "gjcRole": { "type": ["string", "null"] },
+          "runtime": { "type": "string", "minLength": 1 },
+          "satellites": { "type": "array", "items": { "type": "string" } },
+          "crossFamily": { "type": "boolean" },
+          "modelHint": { "type": "string", "description": "Model/provider hint for cost visibility (see COSTS.md)." }
+        }
+      }
+    },
+    "discord": {
+      "type": "object",
+      "required": ["categories", "channels", "requireMention", "autoThread"],
+      "additionalProperties": true,
+      "properties": {
+        "requireMention": { "type": "boolean" },
+        "autoThread": { "type": "boolean" },
+        "categories": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "channels": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["name", "category", "access"],
+            "additionalProperties": true,
+            "properties": {
+              "name": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+              "category": { "type": "string", "minLength": 1 },
+              "purpose": { "type": "string" },
+              "access": {
+                "type": "array",
+                "minItems": 1,
+                "items": { "type": "string", "minLength": 1 }
+              },
+              "freeResponse": { "type": "boolean" },
+              "optional": { "type": "boolean" }
+            }
+          }
+        }
+      }
+    },
+    "references": { "type": "array", "items": { "type": "string" } }
+  }
+}

@@ -30,6 +30,14 @@
 3. 단순 1~2파일은 직접. 큰 덩어리만 위성 위임 (GJC 위임 신호와 동일)
 4. 실패·테스트 깨짐 시에만 effort/모드 격상 (`coding-sprint` / `escalation`)
 
+## 제품 프레임워크 (선택)
+
+Cursor/Codex/Claude가 코드를 *짜는 주체*라면, 프레임워크는 그 코드를 *짜 넣는 틀*입니다. 회사 제품 스택은 아직 확정 전 — 풀스택 TS로 갈 경우 후보는 **akanjs**(Bun+React+SQLite, 스키마 SSoT→API→UI 코드젠).
+
+1. akanjs 코드베이스에서 작업하면 akanjs가 생성하는 **AI 에이전트 가이드라인**을 먼저 읽고 그 규약(도메인 모듈 구조·스키마 단일 진실원천·타입 전파)을 따른다
+2. 스택 확정 전에는 akanjs를 강제하지 않는다 (후보). 채택은 CEO·Board 결정
+3. 프레임워크 세부는 `company.discord.json`의 `devCenter.frameworks`가 진실원천
+
 ## 소통 규칙
 
 - 멘션 시에만 공유 채널 응답

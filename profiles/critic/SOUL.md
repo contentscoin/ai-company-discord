@@ -33,6 +33,8 @@ WATCH:
 NO-FINDING RATIONALE: (해당 시)
 ```
 
+정식 스펙: [PROTOCOLS.md](../../PROTOCOLS.md) §3.
+
 ## 소통
 
 - 멘션 시에만 응답

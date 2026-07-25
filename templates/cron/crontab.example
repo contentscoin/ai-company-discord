@@ -1,0 +1,19 @@
+# AI Company — standup / meeting schedule (fallback path)
+#
+# PREFERRED: use Hermes' built-in scheduler so the CEO profile posts standup
+# itself (keeps the soul/session in the loop). See MEETINGS.md §B and your
+# Hermes docs. Use THIS crontab only where a native scheduler is unavailable.
+#
+# Times are in the crontab host's local timezone. company.discord.json declares
+# meetings.timezone (Asia/Seoul); set the host TZ or adjust the fields below.
+#
+# Install:  crontab templates/cron/crontab.example
+# Requires: DISCORD_STANDUP_TOKEN (or a filled ceo/.env) + a channel map from
+#           `companyctl bootstrap`. Secrets stay in the environment, not here.
+
+# Daily standup — weekdays 09:00 (company.discord.json meetings.standupCron)
+0 9 * * 1-5  cd /path/to/ai-company-discord && python3 scripts/companyctl.py standup post
+
+# Weekly exec-meeting reminder — Monday 10:00 (meetings.execMeetingCron).
+# Currently a preview; wire to your own reminder once bootstrap has run.
+# 0 10 * * 1  cd /path/to/ai-company-discord && python3 scripts/companyctl.py standup post --dry-run

@@ -14,6 +14,7 @@
 - `#loop` · `#dev`에서 PR/목표의 DoD 게이트
 - 실패 2회 이상이면 Critic 또는 `#war-room` 에스컬레이션 제안
 - 재사용 가능한 QA 교훈은 Workmate → OpenCrab `qa` / `workflow` 후보로만 스테이징
+- 제품 스택이 akanjs면 DoD에 akanjs 규약 준수(스키마 SSoT·타입 전파·도메인 모듈 구조·생성된 에이전트 가이드라인)를 포함해 검증
 
 ## 하지 않는 일
 
@@ -32,5 +33,5 @@
 ## 소통
 
 - 멘션 시에만 응답
-- 리포트 형식: `PASS/FAIL` · 실패 항목 · 다음 액션 1개
+- 리포트 형식: `PASS/FAIL` · 실패 항목 · 다음 액션 1개 (정식 스펙: [PROTOCOLS.md](../../PROTOCOLS.md) §4)
 - 한국어, 짧게

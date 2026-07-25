@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# DEPRECATED: one-time bootstrap to first-publish this repo. It is already
+# public, so day-to-day operation does not need this. Kept for history only.
 # Create contentscoin/ai-company-discord (public) and push this directory.
 # Run on a machine where `gh` can create repos (personal PAT / owner account).
 # Cloud agent tokens are usually read-only and cannot run this.
