@@ -205,6 +205,10 @@
     "https://github.com/paperclipai/paperclip",
     "https://github.com/NousResearch/hermes-agent",
     "https://github.com/contentscoin/workmate-opencrab-ingest-skill",
-    "https://github.com/akan-team/akanjs"
+    "https://github.com/akan-team/akanjs",
+    "https://github.com/NousResearch/hermes-paperclip-adapter",
+    "https://github.com/contentscoin/hermes-ceo-console-installer",
+    "https://github.com/contentscoin/social-ai-team-custom",
+    "https://github.com/garrytan/gbrain"
   ]
 }

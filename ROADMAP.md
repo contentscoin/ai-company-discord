@@ -263,3 +263,7 @@ flowchart LR
 | 6 | 시크릿 유출 벡터 (새 스크립트 전부) | 토큰은 env/.env만, 인자·로그 금지, doctor는 해시 비교, 스노우플레이크도 레포 밖 |
 | 7 | Windows python3 부재 가능 | 래퍼에 `py -3` 런처 fallback 내장 (Phase 1.5) |
 | 8 | 문서 언어 혼재 | 정책 유지: README 영어, 운영 문서·본 기획서 한국어 |
+
+## 9. Phase 6 — 실행 계층 연결
+
+원질문(커서 요금제·SNS 운용·실행 루프) 대비 감사와 Phase 6 기획은 [ALIGNMENT.md](./ALIGNMENT.md)에 있습니다. 요지: hermes-paperclip-adapter 채택(이슈→실행 루프), Cursor Cloud Agents 연동(CTO 위임 실체화, 커서 플랜 과금), social-ai-team-custom 연동(Growth 실행 계층), 데스크톱 전략 단일화(기존 installer와 통합 결정).
