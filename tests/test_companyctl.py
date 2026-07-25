@@ -329,6 +329,72 @@ class DoctorRegressionTests(unittest.TestCase):
             self.assertTrue(any(l == "FAIL" and "require_mention is false" in m for l, m in rows))
 
 
+class LifecycleTests(unittest.TestCase):
+    CFG = {"roles": [
+        {"id": "ceo", "hermesProfile": "ceo"},
+        {"id": "cto", "hermesProfile": "cto"},
+    ]}
+
+    def test_selected_profiles_all_and_one(self):
+        self.assertEqual(companyctl.selected_profiles(self.CFG, None), ["ceo", "cto"])
+        self.assertEqual(companyctl.selected_profiles(self.CFG, "cto"), ["cto"])
+
+    def test_unknown_profile_is_clean_exit(self):
+        with self.assertRaises(SystemExit):
+            companyctl.selected_profiles(self.CFG, "nope")
+
+    def test_pid_alive_rejects_impossible_pids(self):
+        self.assertFalse(companyctl.pid_alive(-1))
+        self.assertFalse(companyctl.pid_alive(0))
+        self.assertFalse(companyctl.pid_alive(None))
+
+    def test_pid_alive_true_for_self(self):
+        import os as _os
+        self.assertTrue(companyctl.pid_alive(_os.getpid()))
+
+    def test_zombie_is_not_alive(self):
+        """A gateway whose parent exited lingers as an unreaped zombie; status
+        must not count it as up."""
+        import os as _os, subprocess as _sp, time as _t
+        proc = _sp.Popen(["sleep", "30"], start_new_session=True,
+                         stdout=_sp.DEVNULL, stderr=_sp.DEVNULL)
+        pid = proc.pid
+        self.assertTrue(companyctl.pid_alive(pid))
+        proc.kill()
+        # Do NOT wait() — leaving it unreaped is exactly the zombie case.
+        for _ in range(50):
+            if companyctl._is_zombie(pid) or not _os.path.exists(f"/proc/{pid}"):
+                break
+            _t.sleep(0.05)
+        self.assertFalse(companyctl.pid_alive(pid))
+        proc.wait()  # clean up the test's own child
+
+    def test_corrupt_gateway_state_is_clean_exit(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            (home / "ai-company").mkdir(parents=True)
+            (home / "ai-company" / "gateways.json").write_text("{oops")
+            with self.assertRaises(SystemExit):
+                companyctl.load_gateways(home)
+
+    def test_gateway_state_roundtrip(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            companyctl.save_gateways(home, {"ceo": {"pid": 42}})
+            self.assertEqual(companyctl.load_gateways(home)["ceo"]["pid"], 42)
+
+    def test_service_units_reference_the_profile_and_home(self):
+        unit = companyctl.SYSTEMD_UNIT.format(profile="ceo", home="/h", bin="/usr/bin/hermes")
+        self.assertIn("-p ceo gateway start", unit)
+        self.assertIn("HERMES_HOME=/h", unit)
+        self.assertIn("Restart=always", unit)
+        plist = companyctl.LAUNCHD_PLIST.format(profile="cto", home="/h", bin="/usr/bin/hermes")
+        self.assertIn("<string>cto</string>", plist)
+        self.assertIn("KeepAlive", plist)
+
+
 class MapAndInputTests(unittest.TestCase):
     def test_corrupt_map_raises_clean_systemexit(self):
         import tempfile

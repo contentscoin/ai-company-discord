@@ -1,0 +1,98 @@
+# AI Company — one command to bring the company up.
+#
+#   docker compose up -d      # start 5 gateways + Paperclip
+#   docker compose ps         # who is running
+#   docker compose logs -f ceo
+#   docker compose down
+#
+# Nothing from Hermes or Paperclip is vendored into this repo. Both are built
+# or pulled from upstream at a ref you pin in .env — upgrading is a one-line
+# change, not a merge. See ORCHESTRATION.md.
+#
+# One container = one Hermes home = one profile = one bot token. That keeps the
+# per-soul isolation the project depends on (a shared token makes the gateways
+# collide) and gives each gateway its own restart policy.
+
+name: ai-company
+
+x-hermes: &hermes
+  build:
+    # Upstream ships its own Dockerfile; we build from the pinned git ref.
+    context: "https://github.com/NousResearch/hermes-agent.git#${HERMES_REF:-main}"
+  restart: unless-stopped
+  environment:
+    HERMES_UID: "${HERMES_UID:-10000}"
+    HERMES_GID: "${HERMES_GID:-10000}"
+  stop_grace_period: 20s
+
+services:
+  ceo:
+    <<: *hermes
+    container_name: ai-company-ceo
+    environment:
+      HERMES_UID: "${HERMES_UID:-10000}"
+      HERMES_GID: "${HERMES_GID:-10000}"
+      HERMES_PROFILE: ceo
+    env_file: [./secrets/ceo.env]
+    volumes: ["ceo-home:/opt/data"]
+
+  cto:
+    <<: *hermes
+    container_name: ai-company-cto
+    environment:
+      HERMES_UID: "${HERMES_UID:-10000}"
+      HERMES_GID: "${HERMES_GID:-10000}"
+      HERMES_PROFILE: cto
+    env_file: [./secrets/cto.env]
+    volumes: ["cto-home:/opt/data"]
+
+  loop:
+    <<: *hermes
+    container_name: ai-company-loop
+    environment:
+      HERMES_UID: "${HERMES_UID:-10000}"
+      HERMES_GID: "${HERMES_GID:-10000}"
+      HERMES_PROFILE: loop
+    env_file: [./secrets/loop.env]
+    volumes: ["loop-home:/opt/data"]
+
+  growth:
+    <<: *hermes
+    container_name: ai-company-growth
+    environment:
+      HERMES_UID: "${HERMES_UID:-10000}"
+      HERMES_GID: "${HERMES_GID:-10000}"
+      HERMES_PROFILE: growth
+    env_file: [./secrets/growth.env]
+    volumes: ["growth-home:/opt/data"]
+
+  critic:
+    <<: *hermes
+    container_name: ai-company-critic
+    environment:
+      HERMES_UID: "${HERMES_UID:-10000}"
+      HERMES_GID: "${HERMES_GID:-10000}"
+      HERMES_PROFILE: critic
+    env_file: [./secrets/critic.env]
+    volumes: ["critic-home:/opt/data"]
+
+  # Execution source of truth. Optional — `docker compose up -d ceo cto loop
+  # growth critic` skips it if you run Paperclip elsewhere.
+  paperclip:
+    image: "node:${NODE_TAG:-20-bookworm-slim}"
+    container_name: ai-company-paperclip
+    restart: unless-stopped
+    working_dir: /data
+    command: ["npx", "-y", "paperclipai@${PAPERCLIP_VERSION:-latest}", "onboard", "--yes"]
+    environment:
+      PORT: "3100"
+    ports: ["127.0.0.1:3100:3100"]   # loopback only — not exposed to the network
+    volumes: ["paperclip-data:/data"]
+
+volumes:
+  ceo-home:
+  cto-home:
+  loop-home:
+  growth-home:
+  critic-home:
+  paperclip-data:

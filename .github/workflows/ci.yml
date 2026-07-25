@@ -26,3 +26,12 @@ jobs:
 
       - name: Shellcheck
         run: shellcheck scripts/*.sh
+
+      - name: Validate docker-compose spec
+        run: |
+          # Token files are gitignored; compose needs them to resolve env_file.
+          for p in ceo cto loop growth critic; do
+            echo "DISCORD_BOT_TOKEN=ci-placeholder" > "secrets/$p.env"
+          done
+          docker compose config >/dev/null
+          rm -f secrets/*.env
