@@ -26,7 +26,8 @@
 
 데스크톱 앱의 백엔드가 될 로직은 **이미 대부분 있습니다.**
 
-- `companyctl.py` **1555줄 · 15개 서브커맨드 · 44개 테스트 통과**
+- `companyctl.py` **2220줄 · 18개 서브커맨드 · 73개 테스트 통과** *(2026-07-26 재실측 — 초판의
+  1555줄·15개·44개에서 verify-runtime/verify-cursor/delegate와 `--json`·종료 코드 계약이 추가됨)*
 - **약 20개 함수가 이미 순수 함수** — `validate` `compute_bootstrap_plan` `doctor_offline` `parse_decision_block` `scan_for_sensitive` `render_digest` `render_minutes` 등. 인자 받고 값 반환, 출력 없음 → **재작성 없이 앱 백엔드로 import 가능**
 - 테스트가 이미 그렇게 호출하고 있음(`importlib`로 모듈 로드 후 순수 함수 직접 호출)
 - SSoT(`company.discord.json`) + 스키마 → UI의 채널 그리드·역할 카드·OAuth 권한셋을 **하드코딩 없이 생성 가능**
@@ -55,6 +56,12 @@ Hermes(MIT © 2025 Nous Research)·Paperclip(MIT © 2026 Paperclip Labs) 라이�
 **저는 이것을 확인하지 못했습니다.** Hermes docs 사이트는 403, raw 문서 경로는 404였습니다. README에서 확인된 건 `gateway setup`과 `gateway start`뿐이고 `gateway install`은 확인도 반증도 못 했습니다.
 
 **→ 그래서 Phase 0이 존재하고, 모든 것을 차단합니다.**
+
+> **해소됨 (2026-07-25 실측 — [RUNTIME-CONTRACT.md](./RUNTIME-CONTRACT.md))**: hermes-agent 0.19.0을
+> 실제 설치해 판정 완료. 의심은 절반이 사실이었습니다 — `start`는 정말 **설치된 서비스의 기동
+> 명령**이고(systemd 부재 시 즉시 실패), 포그라운드 실행은 `gateway run`입니다. `companyctl up`을
+> `run`으로 수정했고, 기록 PID가 `hermes gateway list`의 PID와 일치함을 교차 검증했습니다.
+> **PID 추적 전제는 (올바른 동사로) 유효합니다.** 남은 Phase 0 항목은 아래 표 참조.
 
 ### ❌ BREAK 3 — "companyctl을 통째로 백엔드로 재사용한다"
 
@@ -126,24 +133,24 @@ GatewayRuntime.status() / .up() / .down() / .logs()
 
 **GUI 코드는 이 단계 전에 한 줄도 쓰지 않습니다.**
 
-| # | 할 일 | DoD |
-|---|------|-----|
-| 0.1 | 실제 하드웨어 + 버려도 되는 Discord 길드에서 compose 스택 기동 | 컨테이너가 **프로필을 어떻게 선택하는지** 확정 (`HERMES_PROFILE`? CLI 인자? config?) |
-| 0.2 | `hermes gateway` **전체 서브커맨드 실측** | `install` 존재 여부, `start`가 블로킹인지 즉시 반환인지 확정 |
-| 0.3 | 결과를 `RUNTIME-CONTRACT.md`로 고정, `HERMES_REF`를 **그 커밋으로 핀** | `main`이 아닌 정확한 ref |
-| 0.4 | CI에 `windows-latest` + `macos-latest` 추가 (기존 44개 테스트) | "크로스플랫폼"이 문서상 주장에서 **사실 또는 버그 목록**으로 전환 |
+| # | 할 일 | DoD | 상태 (2026-07-26) |
+|---|------|-----|--------------------|
+| 0.1 | 실제 하드웨어 + 버려도 되는 Discord 길드에서 compose 스택 기동 | 컨테이너가 **프로필을 어떻게 선택하는지** 확정 (`HERMES_PROFILE`? CLI 인자? config?) + `doctor --online`으로 봇 신원 5종 상이함 증명 | ⬜ 남음 — Docker 데몬·실길드 필요 |
+| 0.2 | `hermes gateway` **전체 서브커맨드 실측** | `install` 존재 여부, `start`가 블로킹인지 즉시 반환인지 확정 | ✅ **완료** — [RUNTIME-CONTRACT.md](./RUNTIME-CONTRACT.md) (0.19.0 실측: `install` 존재, `start`=서비스 기동, `run`=포그라운드, `up` 수정 및 PID 교차 검증) |
+| 0.3 | 결과를 `RUNTIME-CONTRACT.md`로 고정, `HERMES_REF`를 **그 커밋으로 핀** | `main`이 아닌 정확한 ref | ◐ 절반 — 계약서는 고정됨. `.env.example`의 `HERMES_REF`는 아직 `main` (측정 버전 0.19.0에 대응하는 ref로 핀 필요) |
+| 0.4 | CI에 `windows-latest` + `macos-latest` 추가 | "크로스플랫폼"이 문서상 주장에서 **사실 또는 버그 목록**으로 전환 | ✅ **완료** — `ci.yml` 3-OS 매트릭스에서 73개 테스트 그린 (생명주기의 POSIX 전용 경계도 테스트가 강제) |
 
-> 0.2 결과에 따라 **PR #2의 생명주기 계층을 수정해야 할 수 있습니다.** `start`가 서비스 제어 명령이면 `up`/`status`의 PID 추적 전제가 무너집니다.
+> ~~0.2 결과에 따라 PR #2의 생명주기 계층을 수정해야 할 수 있습니다.~~ **수정했습니다** — `start`는 실제로 서비스 제어 명령이었고, `up`은 `gateway run`으로 교체됐습니다 (RUNTIME-CONTRACT.md §2).
 
-### Phase 1 — 라이브러리화 (M)
+### Phase 1 — 라이브러리화 (M) — ◐ 절반 완료 (2026-07-26 기준)
 
-- `companyctl.py` → `companyctl_core/` 패키지. **순수 함수 20개는 그대로**, `status()` `apply_bootstrap_plan()`을 프린터에서 추출
-- 남은 10개 서브커맨드에 **`--json` 추가 + 종료 코드 계약 고정** ← 이게 GUI의 실제 API
-- `discord_request()`에 **timeout 추가**(현재 없음 → GUI 메인 스레드에서 영구 행). `emit_paperclip()`은 출력 대신 **반환**
-- PyInstaller 대비 `REPO_ROOT`를 frozen-aware로(`sys._MEIPASS`)
-- **생명주기 5개 커맨드는 사이드카 API에서 제외** — Windows 지뢰를 배포하지 않음
+- ✅ **완료** — `validate`·`doctor`·`lint`·`status`에 `--json` + **종료 코드 계약**(0/1/2, README에 문서화·11개 호출 전수 대조), `decision`은 원래 JSON. `status_report()` 순수 함수 분리
+- ✅ **완료** — `discord_request()` timeout(15s), `emit_paperclip()`은 출력 대신 **반환**
+- ⬜ 남음 — `companyctl.py` → `companyctl_core/` 패키지 분리, `apply_bootstrap_plan()` 프린터 추출 (**앱 레포가 생겨야 값을 함** — 그 전에 하면 diff만 늘어남)
+- ⬜ 남음 — PyInstaller 대비 `REPO_ROOT` frozen-aware(`sys._MEIPASS`) — 같은 이유로 앱 레포 시점에
+- **생명주기 5개 커맨드는 사이드카 API에서 제외** — Windows 지뢰를 배포하지 않음 (원칙 유지)
 
-DoD: 44개 테스트 유지 + Windows/macOS CI 통과 + `--json` 계약 문서화
+DoD: ~~44개~~ **73개** 테스트 유지 + Windows/macOS CI 통과 ✅ + `--json` 계약 문서화 ✅
 
 ### Phase 2 — 앱 셸 + Doctor/Dashboard (M)
 

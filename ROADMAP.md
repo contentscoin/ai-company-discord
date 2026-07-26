@@ -264,6 +264,14 @@ flowchart LR
 | 7 | Windows python3 부재 가능 | 래퍼에 `py -3` 런처 fallback 내장 (Phase 1.5) |
 | 8 | 문서 언어 혼재 | 정책 유지: README 영어, 운영 문서·본 기획서 한국어 |
 
-## 9. Phase 6 — 실행 계층 연결
+## 9. Phase 6 — 실행 계층 연결 — ✅ 측정 가능분 완료 (2026-07-26)
 
-원질문(커서 요금제·SNS 운용·실행 루프) 대비 감사와 Phase 6 기획은 [ALIGNMENT.md](./ALIGNMENT.md)에 있습니다. 요지: hermes-paperclip-adapter 채택(이슈→실행 루프), Cursor Cloud Agents 연동(CTO 위임 실체화, 커서 플랜 과금), social-ai-team-custom 연동(Growth 실행 계층), 데스크톱 전략 단일화(기존 installer와 통합 결정).
+원질문(커서 요금제·SNS 운용·실행 루프) 대비 감사와 Phase 6 기획·진행 기록은 [ALIGNMENT.md](./ALIGNMENT.md)에 있습니다. 결과 요지:
+
+- **6.1** Paperclip 내장 `hermes_local` 어댑터 채택, `decision --to-paperclip`을 실측된 API로 수정 ([PAPERCLIP.md](./PAPERCLIP.md))
+- **6.2** 커서 요금제 답 확정 — `cursor` 어댑터는 키 없이 `agent login`만으로 **구독 과금**(실측), 원격 보조는 `verify-cursor`/`delegate` ([COSTS.md](./COSTS.md))
+- **6.3** Growth ↔ social-ai-team-custom 연동 규약 ([GROWTH.md](./GROWTH.md)) — 코드 0줄, 게이트 7만 `#approvals` 승격
+- **6.4** 데스크톱 Board 결정: **B안**(Control Room 신규 앱), installer는 독립 존속 ([DESKTOP-DECISION.md](./DESKTOP-DECISION.md))
+- **6.5** gbrain을 `knowledge.candidates`에 기록
+
+남은 것은 사용자 환경 실측뿐 — [ALIGNMENT.md](./ALIGNMENT.md) 말미의 체크리스트 참조.
