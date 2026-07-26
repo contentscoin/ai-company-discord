@@ -61,17 +61,25 @@ python3 scripts/companyctl.py validate     # 설정 검증 (SOUL.md·채널·acc
   critic/
 ```
 
-각 `.env`에 Discord 토큰과 **LLM API 키**를 채웁니다:
+각 `.env`에 Discord 토큰을 채우고, **두뇌(LLM)는 둘 중 한 방식**으로 연결합니다:
 
 ```bash
 DISCORD_BOT_TOKEN=...    # 해당 프로필 전용
-ANTHROPIC_API_KEY=...    # 또는 OPENAI_API_KEY / OPENROUTER_API_KEY / XAI_API_KEY (0.19.0 실측 인식 목록)
+# 방식 A(구독 OAuth — API 키 불요, 권장): 아래 hermes auth add 참조
+# 방식 B(API 키): ANTHROPIC_API_KEY=... 또는 OPENAI_API_KEY / OPENROUTER_API_KEY / XAI_API_KEY
 # 선택: TELEGRAM_BOT_TOKEN=...  # DM 핫라인만. 회의용 금지
 ```
 
-> **Discord 토큰은 접속만 시켜줍니다.** 응답을 생성할 두뇌는 LLM 키+모델이고, 이건 커서 요금제로
-> 대체되지 않습니다 ([ALIGNMENT.md](./ALIGNMENT.md) §1). 키 없이 기동하면 봇이 온라인인데 침묵하는,
-> Intent 문제와 헷갈리기 쉬운 증상이 됩니다 (라이브에서 실측).
+**방식 A — 구독 OAuth** (0.19.0 실측: `anthropic`·`openai-codex`·`xai-oauth`·`nous` 등 지원):
+
+```bash
+hermes auth add anthropic --type oauth       # Claude 구독 — 브라우저 승인
+hermes auth add openai-codex --type oauth    # ChatGPT/Codex 구독
+```
+
+> **Discord 토큰은 접속만 시켜줍니다.** 두뇌(키 또는 OAuth + 모델) 없이 기동하면 봇이 온라인인데
+> 침묵하는, Intent 문제와 헷갈리기 쉬운 증상이 됩니다 (라이브에서 실측). 구독 OAuth 경로 덕에
+> 원질문의 "종량 API 없이 구독으로" 의도는 대화 축에서도 충족됩니다 ([ALIGNMENT.md](./ALIGNMENT.md) §1 정정).
 
 **모델 선택 (필수, 프로필마다 1회)** — 위저드가 해당 프로필 config에 프로바이더·모델을 정확한
 문법으로 써 줍니다 (0.19.0의 `model:`은 평평한 문자열 — 손으로 쓸 필요 없음):

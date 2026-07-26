@@ -14,10 +14,18 @@
 
 | 갈래 | 가능 여부 | 근거 |
 |------|-----------|------|
-| Hermes 프로필 5개의 **대화/오케스트레이션**(회의 발언, DECISION 집계 등)을 커서 요금제로 | ❌ | Cursor는 범용 chat-completions LLM API를 공식 제공하지 않습니다. OpenAI 호환 Cloud API는 Cursor 포럼의 **피처 리퀘스트 상태**입니다. Hermes 프로필은 LLM API 키(Anthropic/OpenAI/OpenRouter)가 필요하고 이 비용은 커서 플랜으로 대체되지 않습니다 |
+| Hermes 프로필 5개의 **대화/오케스트레이션**(회의 발언, DECISION 집계 등)을 커서 요금제로 | ❌ (단, 구독 OAuth로는 ✅ — 아래 정정) | Cursor는 범용 chat-completions LLM API를 공식 제공하지 않습니다. OpenAI 호환 Cloud API는 Cursor 포럼의 **피처 리퀘스트 상태**입니다. Hermes 프로필은 LLM API 키(Anthropic/OpenAI/OpenRouter)가 필요하고 이 비용은 커서 플랜으로 대체되지 않습니다 |
 | CTO의 **코딩 실행**(이슈 → 구현 → PR)을 커서 요금제로 | ✅ | Cursor **Cloud/Background Agents API**가 존재하며, 그 사용량은 별도 상품이 아니라 **플랜의 크레딧 풀에 과금**됩니다(예: Pro의 월 $20 크레딧, 소진 시 API 단가 초과분). 저장소를 지정해 에이전트를 띄우고 PR을 만들게 하는 프로그래매틱 위임이 가능합니다 |
 
 비공식 우회(예: Cursor Composer를 OpenAI 호환으로 감싸는 `standardagents/composer-api` 프록시)는 존재하지만 **ToS 리스크로 비권장**합니다.
+
+> **2026-07-26 실측 정정 — 프로필 대화도 API 키 없이 갑니다.** hermes-agent 0.19.0을 설치해 확인:
+> `_OAUTH_CAPABLE_PROVIDERS = {"anthropic", "nous", "openai-codex", "xai-oauth", "qwen-oauth", "minimax-oauth"}` —
+> 즉 **Claude 구독(anthropic OAuth)과 ChatGPT/Codex 구독(openai-codex OAuth)으로 프로필 대화가 돌아갑니다**
+> (`hermes auth add anthropic --type oauth` → `hermes -p <name> model`). "커서 요금제로"라는 문자 그대로의
+> 질문에는 여전히 ❌지만, 그 의도("API 종량제 없이 보유 구독으로")는 **양 축 모두 충족**됩니다:
+> 대화 = Claude/ChatGPT 구독 OAuth, CTO 코딩 실행 = 커서 구독(`agent login`). Gemini는 0.19.0 OAuth
+> 세트에 없고(실측), Cursor는 채팅 브레인이 아니라 실행 전용이라는 기존 결론은 유지됩니다.
 
 **현재 프로젝트와의 정합**: [ROUTING.md](./ROUTING.md)는 처음부터 "이슈 owner는 Cursor(CTO), Codex/Claude는 위성"으로 설계돼 있어 **구조는 원질문의 정답 방향이었습니다.** 빠져 있는 것은 그 관례를 실제 API 호출로 실체화하는 계층입니다(→ Phase 6.2).
 
