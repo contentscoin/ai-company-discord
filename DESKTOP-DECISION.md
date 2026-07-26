@@ -120,8 +120,9 @@ PAPERCLIP: create-issue
 않고, Paperclip은 `installer.manifest.json`의 `mode: "local-fmg-source-install"`대로 **첫 실행 시
 핀 커밋에서 소스 설치**됩니다 — embedded-postgres 페이로드는 사용자의 패키지 매니저가 받습니다.
 installer는 처음부터 B안이 처방한 "업스트림 미번들" 패턴이었습니다. 잔여 조치는 부채 상환이 아니라
-**배포 경계·의무 발동 조건의 명문화**이며, installer#1 PR로 올라가 있습니다 (§4 ①은 결정 당시
-기록으로 보존).
+**배포 경계·의무 발동 조건의 명문화**입니다 — 제안 텍스트는 installer#1 PR로 올렸다가 Board의 작업
+경계 지시(참고 레포에 PR 금지 — [CLAUDE.md](./CLAUDE.md))에 따라 닫았고, 반영 여부는 그 프로젝트
+자율입니다 (§4 ①은 결정 당시 기록으로 보존).
 
 마감 블록 (Discord에 남긴 뒤 `companyctl decision`으로 적재):
 
@@ -130,7 +131,6 @@ DECISION:
 - 이 기획의 데스크톱 산출물은 DESKTOP.md Control Room 신규 앱 (B안, DESKTOP-DECISION.md §7)
 - hermes-ceo-console-installer는 독립 프로젝트로 존속 (아카이브하지 않음, 고지 부채 없음 — 실측)
 ACTIONS:
-- @board : installer#1 (NOTICE 배포 경계 명문화) 리뷰·머지 (DUE: 2026-08-08)
 - @CTO : Phase 0 런타임 계약 실측 — 실기기에서 verify-runtime + doctor --online (DUE: 2026-08-15)
 ```
 
@@ -138,7 +138,7 @@ ACTIONS:
 
 | # | 일 | 어디서 | 차단 관계 |
 |---|----|--------|-----------|
-| 1 | ~~embedded-postgres 고지 부채 상환~~ → **실측으로 부채 없음 확인**. NOTICE에 배포 경계·의무 발동 조건 명문화 (installer#1, 리뷰 대기) | installer 레포 (Board) | 다른 항목과 독립 |
+| 1 | ~~embedded-postgres 고지 부채 상환~~ → **실측으로 부채 없음 확인**. NOTICE 배포 경계 명문화 제안은 닫힌 installer#1에 있음 — 반영은 그 프로젝트 자율 (참고 레포 PR 금지, [CLAUDE.md](./CLAUDE.md)) | installer 프로젝트 (Board 자율) | 이 기획과 무관 |
 | 2 | **Phase 0 실측**: 실기기 + 버려도 되는 길드에서 `companyctl verify-runtime` → `RUNTIME-CONTRACT.md`, `doctor --online`으로 봇 신원 5종 상이함 증명, `HERMES_REF` 커밋 핀 | 사용자 로컬 | **이후 전부를 차단** (DESKTOP.md Phase 0) |
 | 3 | 앱 레포 `ai-company-desktop` 생성 — companyctl을 버전 고정 라이브러리로 소비 (DESKTOP.md §5.1: 이 레포에 앱 코드를 넣지 않음) | 신규 레포 | 2 이후 |
 | 4 | DESKTOP.md Phase 1 잔여분(패키지 분리, `REPO_ROOT` frozen-aware)을 앱 레포 쪽에서 | 앱 레포 | 3 이후 |
