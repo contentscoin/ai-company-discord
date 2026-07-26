@@ -85,7 +85,7 @@
 
 ### 6.4 데스크톱 전략 단일화 — **결정 완료: B안** (Board, 2026-07-25)
 
-**진행 상황**: Board 결정 자료 [DESKTOP-DECISION.md](./DESKTOP-DECISION.md) 작성(질문 3개, 자산 실체 비교, A안 조건부 권고, 결정 무관 즉시 조치 4건) → **Board가 B안(신규 Control Room 앱) 채택**. 권고(A)와 결정(B)이 갈렸고, 둘 다 기록에 남김 — 이 게이트의 정상 동작. DESKTOP.md가 유효 로드맵으로 승격(규율 포함: Phase 0 실측 전 GUI 코드 금지). **2026-07-26 개정: installer는 아카이브하지 않고 독립 프로젝트로 존속**. 같은 날 실측 정정: NOTICE "부채"는 반증됨(위 §6.4 정정 인용구 — 번들이 아니라 소스 설치) — 배포 경계 명시 PR(installer#1)로 대체. 후속은 DESKTOP-DECISION.md §7 B-경로 백로그(Phase 0 실측 → 앱 레포 신설 → Phase 1~5). 이 레포의 몫(--json 계약, verify-runtime)은 이미 출하됨.
+**진행 상황**: Board 결정 자료 [DESKTOP-DECISION.md](./DESKTOP-DECISION.md) 작성(질문 3개, 자산 실체 비교, A안 조건부 권고, 결정 무관 즉시 조치 4건) → **Board가 B안(신규 Control Room 앱) 채택**. 권고(A)와 결정(B)이 갈렸고, 둘 다 기록에 남김 — 이 게이트의 정상 동작. DESKTOP.md가 유효 로드맵으로 승격(규율 포함: Phase 0 실측 전 GUI 코드 금지). **2026-07-26 개정: installer는 아카이브하지 않고 독립 프로젝트로 존속**. 같은 날 실측 정정: NOTICE "부채"는 반증됨(위 §6.4 정정 인용구 — 번들이 아니라 소스 설치). installer 쪽 반영은 그 프로젝트 자율 — 참고 레포에는 PR을 넣지 않는다는 작업 경계 확정([CLAUDE.md](./CLAUDE.md)). 후속은 DESKTOP-DECISION.md §7 B-경로 백로그(Phase 0 실측 → 앱 레포 신설 → Phase 1~5). 이 레포의 몫(--json 계약, verify-runtime)은 이미 출하됨.
 
 [DESKTOP.md](./DESKTOP.md)는 `hermes-ceo-console-installer`(Electron, alpha.27, 이미 Win/mac 산출물 존재)를 모른 채 신규 Python+pywebview 앱을 설계했습니다. 두 자산의 관계를 정해야 합니다:
 
@@ -96,7 +96,7 @@
 
 **어느 쪽이든 즉시 적용되는 발견**: 기존 installer는 Paperclip을 번들하므로 [DESKTOP.md](./DESKTOP.md) BREAK 1의 `embedded-postgres` 제3자 라이선스 리스크(PostgreSQL 18.4 + 라이브러리 8종 고지 의무)가 **그 레포에 오늘 이미 적용**됩니다. 선택과 무관하게 통지 필요.
 
-> **2026-07-26 실측 정정**: 위 문장은 반증됐습니다. installer 레포를 클론해 확인한 결과 릴리스 자산은 FMG 통합 계층+Electron 셸뿐(팩 zip 26파일 313KB)이고, Paperclip은 `mode: "local-fmg-source-install"`로 **첫 실행 시 핀 커밋에서 소스 설치**됩니다 — embedded-postgres 페이로드는 사용자의 패키지 매니저가 받는 것이지 이 레포가 재배포하지 않습니다. 즉 installer는 처음부터 B안이 처방한 "업스트림 미번들 + 첫 실행 확보" 패턴이었고, **고지 부채는 현 배포 형태에 존재하지 않습니다**. 대신 배포 경계와 의무 발동 조건을 NOTICE에 명시하는 PR을 올렸습니다(installer#1).
+> **2026-07-26 실측 정정**: 위 문장은 반증됐습니다. installer 레포를 클론해 확인한 결과 릴리스 자산은 FMG 통합 계층+Electron 셸뿐(팩 zip 26파일 313KB)이고, Paperclip은 `mode: "local-fmg-source-install"`로 **첫 실행 시 핀 커밋에서 소스 설치**됩니다 — embedded-postgres 페이로드는 사용자의 패키지 매니저가 받는 것이지 이 레포가 재배포하지 않습니다. 즉 installer는 처음부터 B안이 처방한 "업스트림 미번들 + 첫 실행 확보" 패턴이었고, **고지 부채는 현 배포 형태에 존재하지 않습니다**. 배포 경계를 NOTICE에 명문화하자는 제안은 installer#1로 올렸다가 **Board의 작업 경계 지시(참고 레포에 PR 금지 — [CLAUDE.md](./CLAUDE.md))에 따라 닫았습니다** — 제안 텍스트는 닫힌 PR에 남아 있고, 반영 여부는 그 프로젝트 자율입니다.
 
 ### 6.5 gbrain 포지션 기록 (S) — **완료**
 
