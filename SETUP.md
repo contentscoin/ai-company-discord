@@ -61,11 +61,23 @@ python3 scripts/companyctl.py validate     # 설정 검증 (SOUL.md·채널·acc
   critic/
 ```
 
-각 `.env`에 Discord 토큰만 채웁니다:
+각 `.env`에 Discord 토큰과 **LLM API 키**를 채웁니다:
 
 ```bash
-DISCORD_BOT_TOKEN=...   # 해당 프로필 전용
+DISCORD_BOT_TOKEN=...    # 해당 프로필 전용
+ANTHROPIC_API_KEY=...    # 또는 OPENAI_API_KEY / OPENROUTER_API_KEY / XAI_API_KEY (0.19.0 실측 인식 목록)
 # 선택: TELEGRAM_BOT_TOKEN=...  # DM 핫라인만. 회의용 금지
+```
+
+> **Discord 토큰은 접속만 시켜줍니다.** 응답을 생성할 두뇌는 LLM 키+모델이고, 이건 커서 요금제로
+> 대체되지 않습니다 ([ALIGNMENT.md](./ALIGNMENT.md) §1). 키 없이 기동하면 봇이 온라인인데 침묵하는,
+> Intent 문제와 헷갈리기 쉬운 증상이 됩니다 (라이브에서 실측).
+
+**모델 선택 (필수, 프로필마다 1회)** — 위저드가 해당 프로필 config에 프로바이더·모델을 정확한
+문법으로 써 줍니다 (0.19.0의 `model:`은 평평한 문자열 — 손으로 쓸 필요 없음):
+
+```bash
+hermes -p ceo model      # cto, loop, growth, critic 반복
 ```
 
 ## 4. 게이트웨이 기동

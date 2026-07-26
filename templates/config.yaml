@@ -13,7 +13,9 @@ platform_toolsets:
   discord: [hermes-discord]
   # telegram: [hermes-telegram]  # DM 핫라인만 쓸 때 활성화
 
-# Model: set per profile / provider. Cursor-primary work is outside Hermes for CTO.
-# Example Nous/OpenRouter style — adjust to your provider:
-# model:
-#   default: anthropic/claude-sonnet-4
+# Model: REQUIRED for the bot to answer (the Discord token only connects it).
+# hermes 0.19.0 expects a FLAT string here (measured: DEFAULT_CONFIG has `"model": ""`),
+# not a nested `model.default`. Don't hand-write it — run the wizard once per profile:
+#   hermes -p <name> model
+# It stores the provider + model in this file for you. API keys go in .env
+# (ANTHROPIC_API_KEY / OPENAI_API_KEY / OPENROUTER_API_KEY / XAI_API_KEY — measured list).
