@@ -85,7 +85,7 @@
 
 ### 6.4 데스크톱 전략 단일화 — **결정 완료: B안** (Board, 2026-07-25)
 
-**진행 상황**: Board 결정 자료 [DESKTOP-DECISION.md](./DESKTOP-DECISION.md) 작성(질문 3개, 자산 실체 비교, A안 조건부 권고, 결정 무관 즉시 조치 4건) → **Board가 B안(신규 Control Room 앱) 채택**. 권고(A)와 결정(B)이 갈렸고, 둘 다 기록에 남김 — 이 게이트의 정상 동작. DESKTOP.md가 유효 로드맵으로 승격(규율 포함: Phase 0 실측 전 GUI 코드 금지), installer는 NOTICE 후 아카이브. 후속은 DESKTOP-DECISION.md §7 B-경로 백로그(NOTICE→아카이브 → Phase 0 실측 → 앱 레포 신설 → Phase 1~5). 이 레포의 몫(--json 계약, verify-runtime)은 이미 출하됨.
+**진행 상황**: Board 결정 자료 [DESKTOP-DECISION.md](./DESKTOP-DECISION.md) 작성(질문 3개, 자산 실체 비교, A안 조건부 권고, 결정 무관 즉시 조치 4건) → **Board가 B안(신규 Control Room 앱) 채택**. 권고(A)와 결정(B)이 갈렸고, 둘 다 기록에 남김 — 이 게이트의 정상 동작. DESKTOP.md가 유효 로드맵으로 승격(규율 포함: Phase 0 실측 전 GUI 코드 금지). **2026-07-26 개정: installer는 아카이브하지 않고 독립 프로젝트로 존속** — 단 제3자 라이선스 NOTICE 의무는 배포물 자체의 것이라 그 레포에 계속 적용. 후속은 DESKTOP-DECISION.md §7 B-경로 백로그(NOTICE → Phase 0 실측 → 앱 레포 신설 → Phase 1~5). 이 레포의 몫(--json 계약, verify-runtime)은 이미 출하됨.
 
 [DESKTOP.md](./DESKTOP.md)는 `hermes-ceo-console-installer`(Electron, alpha.27, 이미 Win/mac 산출물 존재)를 모른 채 신규 Python+pywebview 앱을 설계했습니다. 두 자산의 관계를 정해야 합니다:
 
