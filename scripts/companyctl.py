@@ -114,6 +114,20 @@ def resolve_hermes_home(args: argparse.Namespace) -> Path:
     return Path(raw).expanduser()
 
 
+SNOWFLAKE_RE = re.compile(r"^\d{15,22}$")
+
+
+def parse_snowflake(value: str | None) -> str | None:
+    """Return the trimmed value if it looks like a Discord snowflake id, else None.
+
+    Guards user-supplied ids before they reach a URL path — a stray
+    placeholder ("<서버ID>") otherwise surfaces as a UnicodeEncodeError
+    traceback from http.client instead of the contracted exit 2.
+    """
+    v = (value or "").strip()
+    return v if SNOWFLAKE_RE.fullmatch(v) else None
+
+
 def state_dir(hermes_home: Path) -> Path:
     return hermes_home / "ai-company"
 
@@ -484,9 +498,20 @@ def cmd_bootstrap(args: argparse.Namespace) -> int:
     if not token:
         print("ERROR: set DISCORD_SETUP_TOKEN (bot token) in the environment.", file=sys.stderr)
         return 2
-    guild = args.guild or os.environ.get("DISCORD_GUILD_ID")
-    if not guild:
+    raw_guild = args.guild or os.environ.get("DISCORD_GUILD_ID")
+    if not raw_guild:
         print("ERROR: pass --guild <id> or set DISCORD_GUILD_ID.", file=sys.stderr)
+        return 2
+    guild = parse_snowflake(raw_guild)
+    if not guild:
+        print(
+            f"ERROR: --guild must be a numeric Discord server ID (15-22 digits), got: {raw_guild!r}",
+            file=sys.stderr,
+        )
+        print(
+            "       Discord: Settings -> Advanced -> Developer Mode ON, then right-click the server -> Copy Server ID.",
+            file=sys.stderr,
+        )
         return 2
 
     try:
@@ -1175,8 +1200,15 @@ def cmd_archive(args: argparse.Namespace) -> int:
     if not token:
         print("ERROR: no token (set DISCORD_SETUP_TOKEN or fill ceo/.env).", file=sys.stderr)
         return 2
+    thread = parse_snowflake(args.thread)
+    if not thread:
+        print(
+            f"ERROR: --thread must be a numeric Discord thread/channel ID (15-22 digits), got: {args.thread!r}",
+            file=sys.stderr,
+        )
+        return 2
     try:
-        name, messages = fetch_thread(args.thread, token)
+        name, messages = fetch_thread(thread, token)
     except DiscordError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2

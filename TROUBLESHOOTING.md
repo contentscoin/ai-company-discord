@@ -9,6 +9,8 @@
 | 게이트웨이 기동 실패, 로그에 conflict | 두 프로필 `.env`에 **같은 봇 토큰** | 프로필당 전용 토큰인지 확인. Developer Portal에서 봇 5개가 각각 존재하는지 확인 |
 | 봇이 온라인인데 아무 반응 없음 | Message Content Intent OFF | Developer Portal → Bot → Privileged Gateway Intents → **Message Content Intent ON** 후 게이트웨이 재시작 |
 | 토큰 재발급 후에도 인증 실패 | `.env`에 예전 토큰 잔존 (토큰은 Reset 시 1회만 표시) | `~/.hermes/profiles/<name>/.env`의 `DISCORD_BOT_TOKEN` 갱신 |
+| doctor가 "DISCORD_BOT_TOKEN is empty" — 분명히 `.env`를 채웠는데 | 토큰을 넣은 경로 ≠ 실제 Hermes home. companyctl은 `HERMES_HOME` 환경변수를 존중하며, Windows에서는 Hermes가 `%LOCALAPPDATA%\hermes`로 잡아두는 경우가 있음 (실측) | **`scaffold` 출력의 `==> Hermes home:` 경로**를 믿고 그 아래 `profiles/<name>/.env`를 편집 |
+| `bootstrap`이 UnicodeEncodeError 트레이스백(구버전) 또는 "must be a numeric Discord server ID" | `--guild`에 placeholder·비숫자 값이 들어감 | Discord 설정 → 고급 → 개발자 모드 ON → 서버 우클릭 → "서버 ID 복사"의 **숫자만** 사용 |
 
 ## 채널 · 권한
 

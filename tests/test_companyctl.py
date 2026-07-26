@@ -1,10 +1,13 @@
 """Unit tests for companyctl pure logic (no network). Run: python3 -m unittest discover -s tests"""
 
 import argparse
+import contextlib
 import importlib.util
+import io
 import json
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -691,6 +694,49 @@ class MapAndInputTests(unittest.TestCase):
             companyctl.die("ERROR: nope")
         self.assertEqual(cm.exception.code, 2)
         self.assertEqual(err.getvalue().strip(), "ERROR: nope")
+
+
+class SnowflakeGuardTests(unittest.TestCase):
+    """User-supplied Discord ids must fail closed (exit 2) before any network I/O.
+
+    Found live: a Korean placeholder passed as --guild reached the URL path and
+    surfaced as a UnicodeEncodeError traceback from http.client.
+    """
+
+    def test_numeric_ids_pass(self):
+        self.assertEqual(
+            companyctl.parse_snowflake("1475538582725722265"), "1475538582725722265"
+        )
+        self.assertEqual(
+            companyctl.parse_snowflake(" 123456789012345678 "), "123456789012345678"
+        )
+
+    def test_placeholders_and_junk_fail(self):
+        for bad in ("여기에_실제_서버ID_숫자", "<server-id>", "", None, "12345", "123abc456789012345"):
+            self.assertIsNone(companyctl.parse_snowflake(bad), bad)
+
+    def test_bootstrap_rejects_non_numeric_guild_before_network(self):
+        env = {"DISCORD_SETUP_TOKEN": "x" * 60}
+        args = argparse.Namespace(
+            config=str(REPO_ROOT / "templates" / "company.discord.json"),
+            guild="여기에_실제_서버ID_숫자",
+        )
+        err = io.StringIO()
+        with unittest.mock.patch.dict(companyctl.os.environ, env, clear=False):
+            with contextlib.redirect_stderr(err):
+                rc = companyctl.cmd_bootstrap(args)
+        self.assertEqual(rc, 2)
+        self.assertIn("numeric Discord server ID", err.getvalue())
+
+    def test_archive_rejects_non_numeric_thread_before_network(self):
+        env = {"DISCORD_SETUP_TOKEN": "x" * 60}
+        args = argparse.Namespace(thread="<thread-id>")
+        err = io.StringIO()
+        with unittest.mock.patch.dict(companyctl.os.environ, env, clear=False):
+            with contextlib.redirect_stderr(err):
+                rc = companyctl.cmd_archive(args)
+        self.assertEqual(rc, 2)
+        self.assertIn("numeric Discord thread/channel ID", err.getvalue())
 
 
 if __name__ == "__main__":
