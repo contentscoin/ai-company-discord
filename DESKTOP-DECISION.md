@@ -114,17 +114,23 @@ PAPERCLIP: create-issue
 존속**시키기로 확인했습니다. 초판의 "NOTICE 후 아카이브"는 두 자산이 같은 목적을 경쟁한다는 전제
 위의 권고였는데, Board 판단으로 그 전제가 해제됐습니다 — installer는 각자의 길을 갑니다. 따라서
 이 문서의 "단일화"는 정확히는 **"이 AI company 기획의 데스크톱 산출물은 B 하나"**라는 의미입니다.
-단, **제3자 라이선스 고지(§4 ①)는 아카이브 여부와 무관한 배포물 자체의 의무**이므로 installer가
-Paperclip을 번들하는 한 그 레포에 계속 적용됩니다 — 이 항목만은 개정 후에도 남습니다.
+
+**실측 정정 (2026-07-26, installer 클론 후)**: §4 ①의 "고지 부채가 오늘 이미 적용" 주장은
+**반증됐습니다.** 릴리스 자산(팩 zip 26파일 313KB + Electron 셸)은 업스트림 바이너리를 재배포하지
+않고, Paperclip은 `installer.manifest.json`의 `mode: "local-fmg-source-install"`대로 **첫 실행 시
+핀 커밋에서 소스 설치**됩니다 — embedded-postgres 페이로드는 사용자의 패키지 매니저가 받습니다.
+installer는 처음부터 B안이 처방한 "업스트림 미번들" 패턴이었습니다. 잔여 조치는 부채 상환이 아니라
+**배포 경계·의무 발동 조건의 명문화**이며, installer#1 PR로 올라가 있습니다 (§4 ①은 결정 당시
+기록으로 보존).
 
 마감 블록 (Discord에 남긴 뒤 `companyctl decision`으로 적재):
 
 ```text
 DECISION:
 - 이 기획의 데스크톱 산출물은 DESKTOP.md Control Room 신규 앱 (B안, DESKTOP-DECISION.md §7)
-- hermes-ceo-console-installer는 독립 프로젝트로 존속 (아카이브하지 않음)
+- hermes-ceo-console-installer는 독립 프로젝트로 존속 (아카이브하지 않음, 고지 부채 없음 — 실측)
 ACTIONS:
-- @board : hermes-ceo-console-installer에 제3자 라이선스 NOTICE 추가 (DUE: 2026-08-08)
+- @board : installer#1 (NOTICE 배포 경계 명문화) 리뷰·머지 (DUE: 2026-08-08)
 - @CTO : Phase 0 런타임 계약 실측 — 실기기에서 verify-runtime + doctor --online (DUE: 2026-08-15)
 ```
 
@@ -132,7 +138,7 @@ ACTIONS:
 
 | # | 일 | 어디서 | 차단 관계 |
 |---|----|--------|-----------|
-| 1 | installer 레포에 embedded-postgres 제3자 고지(NOTICE) 추가 — **아카이브 없음**(독립 존속) | installer 레포 (Board) | 다른 항목과 독립. Paperclip을 번들 배포하는 한 상시 의무 |
+| 1 | ~~embedded-postgres 고지 부채 상환~~ → **실측으로 부채 없음 확인**. NOTICE에 배포 경계·의무 발동 조건 명문화 (installer#1, 리뷰 대기) | installer 레포 (Board) | 다른 항목과 독립 |
 | 2 | **Phase 0 실측**: 실기기 + 버려도 되는 길드에서 `companyctl verify-runtime` → `RUNTIME-CONTRACT.md`, `doctor --online`으로 봇 신원 5종 상이함 증명, `HERMES_REF` 커밋 핀 | 사용자 로컬 | **이후 전부를 차단** (DESKTOP.md Phase 0) |
 | 3 | 앱 레포 `ai-company-desktop` 생성 — companyctl을 버전 고정 라이브러리로 소비 (DESKTOP.md §5.1: 이 레포에 앱 코드를 넣지 않음) | 신규 레포 | 2 이후 |
 | 4 | DESKTOP.md Phase 1 잔여분(패키지 분리, `REPO_ROOT` frozen-aware)을 앱 레포 쪽에서 | 앱 레포 | 3 이후 |
