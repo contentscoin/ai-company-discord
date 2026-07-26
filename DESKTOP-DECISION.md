@@ -2,6 +2,7 @@
 
 > **결정됨 (2026-07-25): Board가 B안(신규 Control Room 앱)을 채택했습니다.** 권고는 A안이었으나
 > CRITICAL dissent가 아닌 권고는 Board 결정을 구속하지 않습니다 — 이 게이트의 목적 그대로입니다.
+> **개정 (2026-07-26): installer는 아카이브하지 않고 독립 프로젝트로 존속합니다** (§7).
 > 결과와 후속 백로그는 §7. 이하 §0~§6은 결정 당시의 자료 원문(기록)입니다.
 
 [ALIGNMENT.md](./ALIGNMENT.md) §4 6.4의 Board 게이트 산출물입니다. **코드보다 결정이 먼저**인 항목이라
@@ -103,19 +104,27 @@ PAPERCLIP: create-issue
 4. WebUI가 `companyctl --json`을 소비하도록 연결 (Dashboard·Doctor 화면)
 5. DESKTOP.md 상단에 "설계 검증 기록" 지위 명시
 
-## 7. 결정 결과 — B안 (2026-07-25)
+## 7. 결정 결과 — B안 (2026-07-25) · installer 독립 존속 (2026-07-26 개정)
 
 **Board 결정: DESKTOP.md Control Room 신규 앱으로 단일화.** [DESKTOP.md](./DESKTOP.md)가 유효한
 로드맵으로 승격되고, 그 문서의 규율도 그대로 승격됩니다 — **Phase 0(런타임 계약 실측) 전에는 GUI
 코드를 한 줄도 쓰지 않습니다.**
 
+**개정 (2026-07-26)**: Board가 `hermes-ceo-console-installer`를 **이 기획과 무관한 독립 프로젝트로
+존속**시키기로 확인했습니다. 초판의 "NOTICE 후 아카이브"는 두 자산이 같은 목적을 경쟁한다는 전제
+위의 권고였는데, Board 판단으로 그 전제가 해제됐습니다 — installer는 각자의 길을 갑니다. 따라서
+이 문서의 "단일화"는 정확히는 **"이 AI company 기획의 데스크톱 산출물은 B 하나"**라는 의미입니다.
+단, **제3자 라이선스 고지(§4 ①)는 아카이브 여부와 무관한 배포물 자체의 의무**이므로 installer가
+Paperclip을 번들하는 한 그 레포에 계속 적용됩니다 — 이 항목만은 개정 후에도 남습니다.
+
 마감 블록 (Discord에 남긴 뒤 `companyctl decision`으로 적재):
 
 ```text
 DECISION:
-- 데스크톱 산출물은 DESKTOP.md Control Room 신규 앱으로 단일화 (B안, DESKTOP-DECISION.md §7)
+- 이 기획의 데스크톱 산출물은 DESKTOP.md Control Room 신규 앱 (B안, DESKTOP-DECISION.md §7)
+- hermes-ceo-console-installer는 독립 프로젝트로 존속 (아카이브하지 않음)
 ACTIONS:
-- @board : hermes-ceo-console-installer에 제3자 라이선스 NOTICE 추가 후 아카이브 (DUE: 2026-08-08)
+- @board : hermes-ceo-console-installer에 제3자 라이선스 NOTICE 추가 (DUE: 2026-08-08)
 - @CTO : Phase 0 런타임 계약 실측 — 실기기에서 verify-runtime + doctor --online (DUE: 2026-08-15)
 ```
 
@@ -123,7 +132,7 @@ ACTIONS:
 
 | # | 일 | 어디서 | 차단 관계 |
 |---|----|--------|-----------|
-| 1 | installer 레포에 embedded-postgres 제3자 고지(NOTICE) 추가 → **그 다음** 아카이브 | installer 레포 (Board) | §3 말미 — 공개 릴리스가 존재했던 기간의 고지 의무는 아카이브로 소멸하지 않음. **아카이브가 NOTICE보다 먼저 오면 안 됨** |
+| 1 | installer 레포에 embedded-postgres 제3자 고지(NOTICE) 추가 — **아카이브 없음**(독립 존속) | installer 레포 (Board) | 다른 항목과 독립. Paperclip을 번들 배포하는 한 상시 의무 |
 | 2 | **Phase 0 실측**: 실기기 + 버려도 되는 길드에서 `companyctl verify-runtime` → `RUNTIME-CONTRACT.md`, `doctor --online`으로 봇 신원 5종 상이함 증명, `HERMES_REF` 커밋 핀 | 사용자 로컬 | **이후 전부를 차단** (DESKTOP.md Phase 0) |
 | 3 | 앱 레포 `ai-company-desktop` 생성 — companyctl을 버전 고정 라이브러리로 소비 (DESKTOP.md §5.1: 이 레포에 앱 코드를 넣지 않음) | 신규 레포 | 2 이후 |
 | 4 | DESKTOP.md Phase 1 잔여분(패키지 분리, `REPO_ROOT` frozen-aware)을 앱 레포 쪽에서 | 앱 레포 | 3 이후 |
